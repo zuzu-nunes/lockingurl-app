@@ -323,6 +323,7 @@ const badge=(meta)=>`<span class="badge" style="background:color-mix(in srgb,var
 
 /* ---------- budget advice ---------- */
 // Share of spendable income per category when there is no history yet.
+const DEFAULT_INCOME=25000; // her monthly pay, prefilled so setup is one tap
 const SHARE={vivienda:.30,comida:.25,transporte:.12,servicios:.10,salud:.05,compras:.07,ocio:.06,otros:.05};
 const NEEDS=new Set(['vivienda','comida','servicios','transporte','salud']);
 const FIXED=new Set(['vivienda','servicios']);
@@ -685,7 +686,7 @@ function vOnboarding(){
   if(ui.ob===2)return `<form class="ob" id="ob">${dots}
     <h1>How much money do you get each month?</h1>
     <p class="lead">Your pay after deductions. If you're paid every 15 days, add both paychecks together. Include any remittances.</p>
-    <div class="field"><label for="ob-inc">Monthly money in (lempiras)</label><input id="ob-inc" class="amount-in num" inputmode="decimal" placeholder="L 0" value="${ui.obIncome||S.income||''}"></div>
+    <div class="field"><label for="ob-inc">Monthly money in (lempiras)</label><input id="ob-inc" class="amount-in num" inputmode="decimal" placeholder="L 0" value="${ui.obIncome||S.income||DEFAULT_INCOME}"></div>
     <p class="hint" id="ob-err" hidden style="color:var(--danger)">Type how much you get each month, like 15000.</p>
     <button class="btn primary wide xl" type="submit">Show my budget</button>
     <button class="link center" type="button" data-act="ob-back">Back</button></form>`;
@@ -817,7 +818,7 @@ function txSheet(id){
   },false);
 }
 function helperSheet(){
-  const est=S.income||Math.round(history(S.txns).income)||'';
+  const est=S.income||Math.round(history(S.txns).income)||DEFAULT_INCOME;
   openSheet(`<div class="row"><h2>Recommend a budget</h2>${close}</div>
     <p class="sub">Tell me how much money you get each month. I'll split it into spending and saving.</p>
     <div class="field"><label for="h-inc">Monthly money in (lempiras)</label><input id="h-inc" class="amount-in num" inputmode="decimal" placeholder="L 0" value="${est}"></div>
