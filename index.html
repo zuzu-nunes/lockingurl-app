@@ -239,6 +239,13 @@ button{cursor:pointer}
 .ob-dots i.on{background:var(--accent)}
 .ob-mark{width:64px;height:64px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
 .ob-mark .ic{width:32px;height:32px}
+.badge .emo{font-size:20px;line-height:1}
+.emogrid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.emo-b{border:1px solid var(--line);background:var(--card2);border-radius:12px;font-size:22px;line-height:1;padding:8px 0}
+.emo-b[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.dotb{width:34px;height:34px;border-radius:50%;border:3px solid var(--card);box-shadow:0 0 0 1px var(--line);padding:0}
+.dotb[aria-pressed="true"]{box-shadow:0 0 0 2px var(--ink)}
+.tile.newtile{border-style:dashed;background:none;color:var(--accent);justify-content:center}
 .isteps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
 .isteps li{display:grid;grid-template-columns:32px 1fr;gap:12px;align-items:start;font-size:16px;line-height:1.45}
 .inum{width:32px;height:32px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:700}
@@ -342,16 +349,27 @@ const ymKey=(y,m)=>`${y}-${pad(m+1)}`;
 const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);
 const fmtDay=s=>{const [y,m,d]=s.split('-').map(Number);return `${MES3[m-1]} ${d}`};
 
-const CATS={
-  vivienda:{n:'Housing',c:'--c1',i:'home'},
-  comida:{n:'Food & groceries',c:'--c2',i:'cart'},
-  transporte:{n:'Transportation',c:'--c3',i:'bus'},
-  servicios:{n:'Utilities',c:'--c4',i:'bolt'},
-  compras:{n:'Shopping',c:'--c5',i:'bag'},
-  ocio:{n:'Entertainment',c:'--c6',i:'ticket'},
-  salud:{n:'Health',c:'--c7',i:'heart'},
-  otros:{n:'Other',c:'--c8',i:'dots'}
+// kind: need (changes month to month), bill (same every month), want (fun & extras)
+const BASE_CATS={
+  vivienda:{n:'Housing',c:'--c1',i:'home',kind:'bill'},
+  comida:{n:'Food & groceries',c:'--c2',i:'cart',kind:'need'},
+  transporte:{n:'Transportation',c:'--c3',i:'bus',kind:'need'},
+  servicios:{n:'Utilities',c:'--c4',i:'bolt',kind:'bill'},
+  compras:{n:'Shopping',c:'--c5',i:'bag',kind:'want'},
+  ocio:{n:'Entertainment',c:'--c6',i:'ticket',kind:'want'},
+  salud:{n:'Health',c:'--c7',i:'heart',kind:'need'},
+  otros:{n:'Other',c:'--c8',i:'dots',kind:'want'}
 };
+// Her categories: the defaults with her renames/emoji/colors applied, plus ones she added (S.cats).
+let CATS={};
+function buildCats(){
+  const o=(S&&S.cats)||{};CATS={};
+  for(const k in BASE_CATS)CATS[k]={...BASE_CATS[k],...(o[k]||{})};
+  for(const k in o)if(!BASE_CATS[k]&&o[k].n)CATS[k]={c:'--c8',i:'dots',kind:'want',...o[k]};
+}
+const activeCats=()=>Object.keys(CATS).filter(k=>!CATS[k].hidden);
+const isNeed=k=>(CATS[k]?.kind||'want')!=='want';
+const isFixed=k=>CATS[k]?.kind==='bill';
 const INC={
   salario:{n:'Salary',c:'--accent',i:'wallet'},
   extra:{n:'14th-month / aguinaldo bonus',c:'--accent',i:'gift'},
@@ -361,7 +379,7 @@ const INC={
 const KINDS={efectivo:{n:'Cash',i:'cash'},banco:{n:'Bank account',i:'bank'},billetera:{n:'Mobile wallet',i:'phone'},tarjeta:{n:'Credit card',i:'card'},prestamo:{n:'Loan',i:'card'}};
 const isDebt=k=>k==='tarjeta'||k==='prestamo';
 const catOf=t=>(t.type==='ingreso'?INC:CATS)[t.cat]||(t.type==='ingreso'?INC.otroing:CATS.otros);
-const badge=(meta)=>`<span class="badge" style="background:color-mix(in srgb,var(${meta.c}) 15%,transparent);color:var(${meta.c})">${icon(meta.i)}</span>`;
+const badge=(meta)=>`<span class="badge" style="background:color-mix(in srgb,var(${meta.c}) 15%,transparent);color:var(${meta.c})">${meta.e?`<span class="emo">${meta.e}</span>`:icon(meta.i)}</span>`;
 
 /* ---------- budget advice ---------- */
 // Share of spendable income per category when there is no history yet.
@@ -369,8 +387,6 @@ const DEFAULT_NAME='Isa'; // the app is just for her for now
 const DEFAULT_PAYDAY='last'; // she's paid once a month, on the last day
 const DEFAULT_INCOME=25000; // her monthly pay, prefilled so setup is one tap
 const SHARE={vivienda:.30,comida:.25,transporte:.12,servicios:.10,salud:.05,compras:.07,ocio:.06,otros:.05};
-const NEEDS=new Set(['vivienda','comida','servicios','transporte','salud']);
-const FIXED=new Set(['vivienda','servicios']);
 const round50=v=>Math.round(v/50)*50;
 const lower=s=>s.charAt(0).toLowerCase()+s.slice(1);
 function history(txns){
@@ -393,34 +409,37 @@ function recommend(income,txns,usual){
   // Cut these categories evenly (each by at most maxCut of itself) until spending fits.
   const trim=(keys,maxCut,limit=spend)=>{const over=tot()-limit;if(over<=0)return;const sub=keys.reduce((a,k)=>a+cats[k],0);if(!sub)return;
     const f=Math.min(maxCut,over/sub);keys.forEach(k=>{cats[k]*=1-f})};
-  const wants=Object.keys(SHARE).filter(k=>!NEEDS.has(k));
-  const flex=Object.keys(SHARE).filter(k=>NEEDS.has(k)&&!FIXED.has(k));
+  const keys=activeCats();
+  const shareSum=keys.reduce((a,k)=>a+(SHARE[k]??.04),0)||1;
+  const share=k=>(SHARE[k]??.04)/shareSum;   // her own categories start with a small slice
+  const wants=keys.filter(k=>!isNeed(k));
+  const flex=keys.filter(k=>isNeed(k)&&!isFixed(k));
   let stated=0;
   if(told){
     // Start from what she says she spends, then make room for savings: extras first, a little off food and transport.
-    for(const k in SHARE)cats[k]=usual[k]||0;
+    for(const k of keys)cats[k]=usual[k]||0;
     stated=tot();
     const buffer=round50(income*.03);
     if(cats.otros<buffer&&tot()+buffer-cats.otros<=income){notes.push(`I added ${L(buffer-cats.otros,0)} under Other for surprises, like a gift or a repair.`);cats.otros=buffer}
     trim(wants,.5);trim(flex,.1);
-    trim(Object.keys(cats).filter(k=>!FIXED.has(k)),1,income); // never plan more than she gets
+    trim(Object.keys(cats).filter(k=>!isFixed(k)),1,income); // never plan more than she gets
   }else{
-    for(const k in SHARE){
-      const base=spend*SHARE[k],hv=h.avg[k]||0;
+    for(const k of keys){
+      const base=spend*share(k),hv=h.avg[k]||0;
       let v=h.months?(hv>0?.6*hv+.4*base:base*.5):base;
-      if(FIXED.has(k)&&hv)v=hv;                 // rent and bills cost what they cost
-      else if(!NEEDS.has(k))v=Math.min(v,base); // never plan more fun money than the rule allows
+      if(isFixed(k)&&hv)v=hv;                 // rent and bills cost what they cost
+      else if(!isNeed(k))v=Math.min(v,base); // never plan more fun money than the rule allows
       cats[k]=v;
     }
-    trim(wants,.5);trim(Object.keys(cats).filter(k=>!FIXED.has(k)),1);
+    trim(wants,.5);trim(Object.keys(cats).filter(k=>!isFixed(k)),1);
   }
-  for(const k in cats)cats[k]=Math.max(0,FIXED.has(k)?Math.ceil(cats[k]/50)*50:round50(cats[k]));
+  for(const k in cats)cats[k]=Math.max(0,isFixed(k)?Math.ceil(cats[k]/50)*50:round50(cats[k]));
   const extra=tot()-income;
-  if(extra>0){const k=Object.keys(cats).filter(x=>!FIXED.has(x)).sort((a,b)=>cats[b]-cats[a])[0];if(k)cats[k]=Math.max(0,cats[k]-extra)}
+  if(extra>0){const k=Object.keys(cats).filter(x=>!isFixed(x)).sort((a,b)=>cats[b]-cats[a])[0];if(k)cats[k]=Math.max(0,cats[k]-extra)}
   const total=tot(),save=Math.max(0,income-total);
   const why=save>=target-50?'so you can save every month':'so it fits your pay';
   if(told){
-    for(const k in SHARE)if(usual[k]&&cats[k]<usual[k]-25)notes.push(`${CATS[k].n}: you said ${L(usual[k],0)}. I set ${L(cats[k],0)} ${why}.`);
+    for(const k of keys)if(usual[k]&&cats[k]<usual[k]-25)notes.push(`${CATS[k].n}: you said ${L(usual[k],0)}. I set ${L(cats[k],0)} ${why}.`);
     notes.unshift(stated>income
       ?`Right now you spend about ${L(stated-income,0)} more than you get. This plan trims the extras so it fits.`
       :save>=target-50
@@ -428,7 +447,7 @@ function recommend(income,txns,usual){
         :'This plan is built from what you told me you spend.');
   }else{
     for(const k in cats){const hv=h.avg[k]||0;
-      if(!FIXED.has(k)&&hv>cats[k]*1.15&&hv-cats[k]>=200)notes.push(`You usually spend ${L(hv,0)} on ${lower(CATS[k].n)}. Spending ${L(cats[k],0)} instead saves you ${L(hv-cats[k],0)} a month.`)}
+      if(!isFixed(k)&&hv>cats[k]*1.15&&hv-cats[k]>=200)notes.push(`You usually spend ${L(hv,0)} on ${lower(CATS[k].n)}. Spending ${L(cats[k],0)} instead saves you ${L(hv-cats[k],0)} a month.`)}
     notes.unshift(h.months
       ?`Based on what you earn and what you spent in the last ${h.months===1?'month':h.months+' months'}.`
       :'Most of your money goes to needs like rent and food, a little goes to fun, and some gets saved every month. Tell me what you really spend and I can fit it better.');
@@ -439,7 +458,7 @@ function recommend(income,txns,usual){
 // "What do you usually spend?" form, shared by setup and the Budget tab.
 const HINTS={vivienda:'Rent or house payment',comida:'Supermarket, pulpería, eating out',transporte:'Bus, taxi, gas',servicios:'Electricity, water, internet, phone',salud:'Pharmacy, doctor',compras:'Clothes, beauty, things for the house',ocio:'Going out, movies, streaming',otros:'Gifts, church, anything else'};
 function usualFields(pre){
-  return `<div class="ulist">${Object.entries(CATS).map(([k,c])=>`<label class="urow" for="u-${k}">${badge(c)}<span class="ut"><b>${c.n}</b><small>${HINTS[k]}</small></span><input id="u-${k}" data-u="${k}" class="num" inputmode="decimal" placeholder="L 0" value="${pre[k]||''}"></label>`).join('')}</div>
+  return `<div class="ulist">${activeCats().map(k=>[k,CATS[k]]).map(([k,c])=>`<label class="urow" for="u-${k}">${badge(c)}<span class="ut"><b>${esc(c.n)}</b><small>${HINTS[k]||''}</small></span><input id="u-${k}" data-u="${k}" class="num" inputmode="decimal" placeholder="L 0" value="${pre[k]||''}"></label>`).join('')}</div>
     <p class="utotal num" id="u-total"></p>`;
 }
 function readUsual(form){const u={};form.querySelectorAll('[data-u]').forEach(i=>{const v=parseAmt(i.value);if(v>0)u[i.dataset.u]=v});return u}
@@ -456,7 +475,7 @@ function usualPrefill(){
   const o={};for(const k in h.avg)o[k]=round50(h.avg[k]);return o;
 }
 const monthProgress=(y,m)=>{const n=new Date();return (y===n.getFullYear()&&m===n.getMonth())?n.getDate()/daysIn(y,m):1};
-function catStatus(spent,limit,prog,k){if(!limit)return 'ok';const p=spent/limit;if(p>1)return 'over';if(FIXED.has(k))return 'ok';return (p>=.9||p>prog+.2)?'warn':'ok'}
+function catStatus(spent,limit,prog,k){if(!limit)return 'ok';const p=spent/limit;if(p>1)return 'over';if(isFixed(k))return 'ok';return (p>=.9||p>prog+.2)?'warn':'ok'}
 function recPlan(rec){
   const rows=Object.entries(rec.cats).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
   return `<div class="plan-top num"><div><span>To spend</span><b>${L(rec.total,0)}</b></div><div class="save"><span>To save</span><b>${L(rec.save,0)}</b></div></div>
@@ -530,6 +549,7 @@ if(S.onboarded===undefined)S.onboarded=true;   // data saved by the first versio
 if(S.income===undefined)S.income=0;
 if(!S.payday)S.payday=DEFAULT_PAYDAY;
 if(!S.name)S.name=DEFAULT_NAME;
+buildCats();
 const SKINS=[['blush','Blush','#C26F88'],['sand','Sand','#A57A5E'],['lilac','Lilac','#8A78C4']];
 function applySkin(){const k=S.skin&&S.skin!=='blush'?S.skin:'';if(k)document.documentElement.dataset.skin=k;else delete document.documentElement.dataset.skin}
 applySkin();
@@ -687,10 +707,10 @@ function vPresupuesto(){
     ${insightsBlock()}`;
   }
   const tx=monthTx(ui.y,ui.m),spentBy=Object.fromEntries(byCat(tx)),prog=monthProgress(ui.y,ui.m);
-  const keys=Object.keys(CATS).filter(k=>S.catBudgets[k]>0||spentBy[k]);
+  const keys=Object.keys(CATS).filter(k=>(!CATS[k].hidden&&S.catBudgets[k]>0)||spentBy[k]);
   const rows=keys.map(k=>{const lim=S.catBudgets[k]||0,sp=spentBy[k]||0,st=catStatus(sp,lim,prog,k),pct=lim?Math.min(100,sp/lim*100):100;
     return `<button class="catrow" data-cat="${k}">${badge(CATS[k])}
-      <span class="cr-body"><span class="cr-top"><span class="t">${CATS[k].n}</span><span class="cr-left num ${st}">${lim?(sp<=lim?(FIXED.has(k)&&sp>=lim*.95?'Paid':`${L(lim-sp,0)} left`):`${L(sp-lim,0)} over`):'No limit'}</span></span>
+      <span class="cr-body"><span class="cr-top"><span class="t">${esc(CATS[k].n)}</span><span class="cr-left num ${st}">${lim?(sp<=lim?(isFixed(k)&&sp>=lim*.95?'Paid':`${L(lim-sp,0)} left`):`${L(sp-lim,0)} over`):'No limit'}</span></span>
       <span class="bar thin ${st==='over'?'over':st==='warn'?'warn':''}"><i style="width:${pct}%"></i></span>
       <span class="s num">${L(sp,0)} of ${L(lim,0)}</span></span></button>`}).join('');
   const out=sum(tx,'gasto');
@@ -704,6 +724,7 @@ function vPresupuesto(){
   <section class="card"><div class="row"><h2>By category</h2><span class="sub">Tap one to change it</span></div>
     <div class="list">${rows}</div>
     <button class="btn wide" data-act="helper">${icon('bulb')} Fit my budget to what I spend</button>
+    <button class="btn wide" data-act="cats">${icon('pencil')} Edit my categories</button>
   </section>
   ${insightsBlock()}`;
 }
@@ -852,6 +873,7 @@ function mountOnboarding(){
 /* ---------- render ---------- */
 const NAV=[['inicio','Home','home'],['gastos','Spending','pie'],['presupuesto','Budget','bulb'],['metas','Goals','target'],['patrimonio','My Money','wallet']];
 function render(){
+  buildCats();
   const nav=document.querySelector('.nav'),fab=document.getElementById('fab');
   if(!S.onboarded){nav.hidden=true;fab.hidden=true;
     if(needInstall()){document.getElementById('app').innerHTML=vInstall();return}
@@ -879,7 +901,7 @@ function openSheet(html,onMount,focus=true){
 function closeSheet(){document.getElementById('sheetHost').innerHTML=''}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet()});
 const acctOpts=sel=>`<option value="">Don't track</option>`+S.accounts.map(a=>`<option value="${a.id}" ${a.id===sel?'selected':''}>${esc(a.name)}</option>`).join('');
-const catOpts=(type,sel)=>Object.entries(type==='ingreso'?INC:CATS).map(([k,c])=>`<option value="${k}" ${k===sel?'selected':''}>${c.n}</option>`).join('');
+const catOpts=(type,sel)=>Object.entries(type==='ingreso'?INC:CATS).filter(([k,c])=>!c.hidden||k===sel).map(([k,c])=>`<option value="${k}" ${k===sel?'selected':''}>${esc(c.n)}</option>`).join('');
 function applyToAcct(t,sign){const a=S.accounts.find(x=>x.id===t.acct);if(!a)return;
   const delta=(t.type==='ingreso'?1:-1)*t.amt*sign;a.bal=r2(a.bal+(isDebt(a.kind)?-delta:delta))}
 function deleteBtn(onConfirm,msg='Tap again to delete'){return b=>{let armed=false;b.addEventListener('click',()=>{if(!armed){armed=true;b.textContent=msg;return}onConfirm()})}}
@@ -890,8 +912,10 @@ function addSheet(type,cat){
   const set=type==='ingreso'?INC:CATS;
   if(!cat){
     openSheet(`<div class="row"><h2>${type==='ingreso'?'Where did the money come from?':'What did you spend on?'}</h2>${close}</div>
-      <div class="tiles">${Object.entries(set).map(([k,c])=>`<button type="button" class="tile" data-pick="${k}">${badge(c)}<span>${c.n}</span></button>`).join('')}</div>`,
-    form=>form.querySelectorAll('[data-pick]').forEach(b=>b.addEventListener('click',()=>addSheet(type,b.dataset.pick))),false);
+      <div class="tiles">${Object.entries(set).filter(([,c])=>!c.hidden).map(([k,c])=>`<button type="button" class="tile" data-pick="${k}">${badge(c)}<span>${esc(c.n)}</span></button>`).join('')}
+        ${type==='gasto'?`<button type="button" class="tile newtile" id="t-new">${icon('plus')}<span>New category</span></button>`:''}</div>`,
+    form=>{form.querySelectorAll('[data-pick]').forEach(b=>b.addEventListener('click',()=>addSheet(type,b.dataset.pick)));
+      const nt=form.querySelector('#t-new');if(nt)nt.addEventListener('click',()=>catEditSheet(null,key=>addSheet('gasto',key)))},false);
     return;
   }
   const meta=set[cat],today=todayISO(),yd=new Date();yd.setDate(yd.getDate()-1);
@@ -900,7 +924,7 @@ function addSheet(type,cat){
   const lim=type==='gasto'?catLeft(cat):null;
   const defAcct=S.lastAcct&&S.accounts.some(a=>a.id===S.lastAcct)?S.lastAcct:'';
   openSheet(`<div class="row"><button type="button" class="link" id="x-back">${icon('chevL')}Back</button>${close}</div>
-    <div class="picked">${badge(meta)}<div><h2>${meta.n}</h2>${lim&&lim.limit?`<p class="sub num">${lim.spent<=lim.limit?`${L(lim.limit-lim.spent,0)} left this month`:`Already ${L(lim.spent-lim.limit,0)} over this month`}</p>`:''}</div></div>
+    <div class="picked">${badge(meta)}<div><h2>${esc(meta.n)}</h2>${lim&&lim.limit?`<p class="sub num">${lim.spent<=lim.limit?`${L(lim.limit-lim.spent,0)} left this month`:`Already ${L(lim.spent-lim.limit,0)} over this month`}</p>`:''}</div></div>
     <div class="field"><label for="x-amt">How much? (lempiras)</label><input id="x-amt" class="amount-in num" inputmode="decimal" placeholder="L 0"></div>
     <div class="qs">${quick.map(v=>`<button type="button" class="q" data-q="${v}">${L(v,0)}</button>`).join('')}</div>
     <div class="field"><label for="x-note">What was it? (optional)</label><input id="x-note" maxlength="60" placeholder="${type==='ingreso'?'e.g. Paycheck':'e.g. Baleadas, groceries, bus'}"></div>
@@ -991,6 +1015,77 @@ function helperSheet(){
   },false);
 }
 const go_=v=>go(v);
+const EMOJIS=['🏠','🛒','🍔','☕','🚌','🚗','⚡','💧','📱','💊','🛍️','👗','💄','💅','💇‍♀️','🏋️‍♀️','🎉','🪩','✨','🕺','🎁','✈️','🐶','🐱','📚','⛪','👶','🍷','💳','🌸'];
+const COLORS=['--c1','--c2','--c3','--c4','--c5','--c6','--c7','--c8'];
+const KIND_N={need:'Need',bill:'Bill',want:'Fun & extras'};
+const KIND_HINT={need:'You need it, but the amount changes. Like food or the bus.',bill:'Same amount every month, like rent or internet. No warnings once it\'s paid.',want:'Nice to have. When money is tight, the budget helper trims these first.'};
+function setCat(k,patch){S.cats={...(S.cats||{})};S.cats[k]={...(S.cats[k]||{}),...patch};buildCats()}
+function recalcBudget(){if(!S.catBudgets)return;S.budget=Object.values(S.catBudgets).reduce((a,b)=>a+b,0);if(S.income)S.saveTarget=Math.max(0,S.income-S.budget)}
+function removeCat(k){
+  const used=S.txns.some(t=>t.cat===k);
+  if(BASE_CATS[k]||used)setCat(k,{hidden:true});      // keep the name for old entries
+  else{const c={...(S.cats||{})};delete c[k];S.cats=c;buildCats()}
+  if(S.catBudgets&&k in S.catBudgets){const b={...S.catBudgets};delete b[k];S.catBudgets=b;recalcBudget()}
+  if(S.usual&&k in S.usual){const u={...S.usual};delete u[k];S.usual=u}
+}
+function catsSheet(){
+  const rows=activeCats().map(k=>{const c=CATS[k];return `<button type="button" class="item" data-ce="${k}">${badge(c)}
+    <span style="min-width:0"><span class="t">${esc(c.n)}</span><br><span class="s num">${KIND_N[c.kind||'want']}${S.catBudgets?.[k]?' · '+L(S.catBudgets[k],0)+' a month':''}</span></span>
+    <span class="a">${icon('chevR')}</span></button>`}).join('');
+  const hidden=Object.keys(CATS).filter(k=>CATS[k].hidden);
+  openSheet(`<div class="row"><h2>My categories</h2>${close}</div>
+    <p class="sub">Tap one to rename it, give it an emoji, or remove it.</p>
+    <div class="list">${rows}</div>
+    <button type="button" class="btn primary wide xl" id="cs-add">${icon('plus')} Add a category</button>
+    ${hidden.length?`<h3 class="sh">Removed</h3><p class="hint">Tap to bring one back.</p><div class="qs">${hidden.map(k=>`<button type="button" class="q" data-restore="${k}">${esc(CATS[k].n)}</button>`).join('')}</div>`:''}`,
+  form=>{
+    form.querySelectorAll('[data-ce]').forEach(b=>b.addEventListener('click',()=>catEditSheet(b.dataset.ce,catsSheet)));
+    form.querySelector('#cs-add').addEventListener('click',()=>catEditSheet(null,catsSheet));
+    form.querySelectorAll('[data-restore]').forEach(b=>b.addEventListener('click',()=>{setCat(b.dataset.restore,{hidden:false});persist();render();catsSheet();toast('Category is back')}));
+  },false);
+}
+// back(key) reopens wherever she came from; for a new category it gets the new key.
+function catEditSheet(k,back){
+  const isNew=!k,c=k?CATS[k]:{n:'',e:'✨',c:'--c2',i:'dots',kind:'want'};
+  let emo=c.e||'',col=c.c,kind=c.kind||'want';
+  openSheet(`<div class="row"><button type="button" class="link" id="ce-back">${icon('chevL')}Back</button>${close}</div>
+    <div class="picked"><span id="ce-prev"></span><h2>${isNew?'New category':'Edit category'}</h2></div>
+    <div class="field"><label for="ce-name">Name</label><input id="ce-name" maxlength="28" value="${esc(c.n)}" placeholder="e.g. Nails, Gym, My dog"></div>
+    <div class="field"><span class="flabel">Emoji</span><div class="emogrid">${EMOJIS.map(x=>`<button type="button" class="emo-b" data-emo="${x}" aria-pressed="${x===emo}">${x}</button>`).join('')}</div></div>
+    <div class="field"><span class="flabel">Color</span><div class="qs">${COLORS.map((x,i)=>`<button type="button" class="dotb" data-col="${x}" aria-pressed="${x===col}" style="background:var(${x})" aria-label="Color ${i+1}"></button>`).join('')}</div></div>
+    <div class="field"><span class="flabel">What kind of spending is it?</span>
+      <div class="seg" role="group" aria-label="Kind">${Object.entries(KIND_N).map(([v,n])=>`<button type="button" data-kind="${v}" aria-pressed="${v===kind}">${n}</button>`).join('')}</div>
+      <p class="hint" id="ce-kh"></p></div>
+    <div class="field"><label for="ce-lim">Monthly limit in lempiras (optional)</label><input id="ce-lim" class="num" inputmode="decimal" placeholder="L 0" value="${k&&S.catBudgets?.[k]||''}"></div>
+    <p class="hint" id="ce-err" hidden style="color:var(--danger)">Give it a name, like "Nails".</p>
+    <button class="btn primary wide xl" type="submit">Save</button>
+    ${isNew?'':'<button type="button" class="btn danger wide" id="ce-del">Remove this category</button>'}`,
+  form=>{
+    const prev=form.querySelector('#ce-prev'),kh=form.querySelector('#ce-kh');
+    const upd=()=>{prev.innerHTML=badge({c:col,e:emo,i:c.i||'dots'});kh.textContent=KIND_HINT[kind];
+      form.querySelectorAll('[data-emo]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.emo===emo));
+      form.querySelectorAll('[data-col]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.col===col));
+      form.querySelectorAll('[data-kind]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.kind===kind))};
+    upd();
+    form.querySelectorAll('[data-emo]').forEach(b=>b.addEventListener('click',()=>{emo=emo===b.dataset.emo&&!isNew?'':b.dataset.emo;upd()}));
+    form.querySelectorAll('[data-col]').forEach(b=>b.addEventListener('click',()=>{col=b.dataset.col;upd()}));
+    form.querySelectorAll('[data-kind]').forEach(b=>b.addEventListener('click',()=>{kind=b.dataset.kind;upd()}));
+    form.querySelector('#ce-back').addEventListener('click',()=>back?back(k):closeSheet());
+    const del=form.querySelector('#ce-del');
+    if(del)deleteBtn(()=>{removeCat(k);persist();render();toast('Category removed');back?back():closeSheet()},'Tap again to remove it')(del);
+    form.addEventListener('submit',e=>{e.preventDefault();
+      const name=form.querySelector('#ce-name').value.trim();
+      if(!name){form.querySelector('#ce-err').hidden=false;form.querySelector('#ce-name').focus();return}
+      const key=k||'u_'+uid();
+      setCat(key,{n:name,e:emo,c:col,kind,hidden:false});
+      const lim=parseAmt(form.querySelector('#ce-lim').value);
+      if(lim>0){S.catBudgets={...(S.catBudgets||{}),[key]:lim};recalcBudget()}
+      else if(S.catBudgets&&key in S.catBudgets){const b={...S.catBudgets};delete b[key];S.catBudgets=b;recalcBudget()}
+      persist();render();toast(isNew?`${name} added ✨`:'Category saved');
+      back?back(key):closeSheet();
+    });
+  },false);
+}
 function catSheet(k){
   const cur=S.catBudgets?.[k]||0,rec=S.income?recommend(S.income,S.txns).cats[k]:null;
   openSheet(`<div class="row"><h2>${CATS[k].n}</h2>${close}</div>
@@ -1065,6 +1160,7 @@ function settingsSheet(){
     <div class="field"><label for="s-pay">When do you get paid?</label>${paydaySelect('s-pay')}</div>
     <div class="field"><span class="flabel">Colors</span><div class="skins" role="group" aria-label="Colors">${SKINS.map(([k,n,c])=>`<button type="button" class="skin" data-skin="${k}" aria-pressed="${(S.skin||'blush')===k}"><i style="background:${c}"></i>${n}</button>`).join('')}</div></div>
     <button class="btn primary wide xl" type="submit">Save</button>
+    <button type="button" class="btn wide" id="s-cats">${icon('pencil')} My categories</button>
     <h3 class="sh">Keep your data safe</h3>
     <p class="hint">Everything is saved on this phone only. Tap <b>Save a backup</b> once a month and keep the file in iCloud Drive or send it to yourself.</p>
     <div class="grid2"><button type="button" class="btn" id="s-export">Save a backup</button><label class="btn" for="s-import" style="text-align:center">Restore a backup</label></div>
@@ -1075,6 +1171,7 @@ function settingsSheet(){
     <button type="button" class="btn danger wide" id="s-clear">Erase everything</button>`,
   form=>{
     form.querySelectorAll('[data-skin]').forEach(b=>b.addEventListener('click',()=>{S.skin=b.dataset.skin;applySkin();persist();form.querySelectorAll('[data-skin]').forEach(x=>x.setAttribute('aria-pressed',x===b))}));
+    form.querySelector('#s-cats').addEventListener('click',catsSheet);
     form.querySelector('#s-export').addEventListener('click',exportBackup);
     form.querySelector('#s-import').addEventListener('change',e=>importBackup(e.target.files[0],form.querySelector('#s-msg')));
     deleteBtn(()=>{S=blankState(S);ui.ob=1;ui.obIncome=0;persist();closeSheet();render()},'Tap again to erase everything')(form.querySelector('#s-clear'));
@@ -1106,6 +1203,7 @@ document.addEventListener('click',e=>{
     case 'next':return shiftMonth(1);
     case 'settings':return settingsSheet();
     case 'helper':return helperSheet();
+    case 'cats':return catsSheet();
     case 'newacct':return acctSheet(null,'efectivo');
     case 'newdebt':return acctSheet(null,'tarjeta');
     case 'newgoal':return goalSheet();
