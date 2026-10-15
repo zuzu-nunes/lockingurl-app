@@ -239,6 +239,11 @@ button{cursor:pointer}
 .ob-dots i.on{background:var(--accent)}
 .ob-mark{width:64px;height:64px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
 .ob-mark .ic{width:32px;height:32px}
+.isteps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
+.isteps li{display:grid;grid-template-columns:32px 1fr;gap:12px;align-items:start;font-size:16px;line-height:1.45}
+.inum{width:32px;height:32px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:700}
+.ic.inline{width:18px;height:18px;vertical-align:-3px;color:var(--blue)}
+.inote{gap:8px;font-size:15px}.inote span{color:var(--muted)}
 .ulist{display:flex;flex-direction:column}
 .urow{display:grid;grid-template-columns:40px 1fr 118px;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line);cursor:text}
 .urow:first-child{border-top:0}
@@ -315,6 +320,7 @@ const P={
   card:'M3 6h18v12H3zM3 10h18M7 15h3',
   cash:'M3 7h18v10H3zM12 10a2 2 0 1 0 0 4 2 2 0 1 0 0-4zM6 10v.01M18 14v.01',
   phone:'M8 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM11 18h2',
+  share:'M12 3v12M8 7l4-4 4 4M5 11v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8',
   up:'M12 19V5M6 11l6-6 6 6', down:'M12 5v14M6 13l6 6 6-6',
   gear:'M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 1 0 0-7zM19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.3 2.5h4l.4-2.5c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4z'
 };
@@ -518,6 +524,7 @@ const ui={view:'inicio',y:new Date().getFullYear(),m:new Date().getMonth(),filte
 try{const v=localStorage.getItem('lempiraflow:view');if(VIEWS.includes(v))ui.view=v}catch(e){}
 try{const raw=localStorage.getItem(LS);if(raw)S=JSON.parse(raw)}catch(e){}
 if(!S||!Array.isArray(S.txns))S=blankState();
+if(!S.onboarded&&S.obDraft){ui.ob=S.obDraft.ob||1;ui.obIncome=S.obDraft.income||0;ui.obUsual=S.obDraft.usual||null}
 if(S.onboarded===undefined)S.onboarded=true;   // data saved by the first version
 if(S.income===undefined)S.income=0;
 if(!S.payday)S.payday=DEFAULT_PAYDAY;
@@ -766,6 +773,31 @@ function insightsBlock(){
 }
 
 /* ---------- first-time setup ---------- */
+// On iPhone, Safari, WhatsApp's browser and the Home Screen app each keep their own data.
+// Ask her to install first so she only fills in setup once, inside the app she'll keep using.
+const UA=navigator.userAgent;
+const IS_IOS=/iPhone|iPad|iPod/.test(UA)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const INSTALLED=navigator.standalone===true||(window.matchMedia&&matchMedia('(display-mode: standalone)').matches);
+const IN_SAFARI=/Safari\//.test(UA)&&!/CriOS|FxiOS|EdgiOS|GSA|FBAN|FBAV|Instagram|WhatsApp/.test(UA);
+const needInstall=()=>IS_IOS&&!INSTALLED&&!ui.skipInstall;
+function vInstall(){
+  const step=(n,html)=>`<li><span class="inum">${n}</span><span>${html}</span></li>`;
+  return `<div class="ob">
+    <div class="ob-mark">${icon('phone')}</div>
+    <h1>First, add LempiraFlow to your Home Screen</h1>
+    <p class="lead">That way it opens like a normal app and remembers everything. You'll only set it up once.</p>
+    ${IN_SAFARI?'':`<section class="card inote"><b>You're inside another app, like WhatsApp.</b>
+      <span>Tap the <b>Safari</b> compass or the <b>⋯</b> button and choose <b>Open in Safari</b>. Or copy the link and paste it in Safari.</span>
+      <button class="btn" data-act="copy-link">Copy the link</button></section>`}
+    <section class="card"><ol class="isteps">
+      ${step(1,`In Safari, tap the <b>Share</b> button ${icon('share','inline')} at the bottom of the screen.`)}
+      ${step(2,`Scroll down and tap <b>Add to Home Screen</b>.`)}
+      ${step(3,`Tap <b>Add</b>, then open <b>LempiraFlow</b> from your Home Screen.`)}
+    </ol></section>
+    <button class="link center" type="button" data-act="install-skip">Continue here anyway</button>
+  </div>`;
+}
+function saveDraft(){S.obDraft={ob:ui.ob,income:ui.obIncome,usual:ui.obUsual};persist()}
 function vOnboarding(){
   const dots=`<div class="ob-dots" aria-label="Step ${ui.ob} of 4">${[1,2,3,4].map(i=>`<i class="${i<=ui.ob?'on':''}"></i>`).join('')}</div>`;
   if(ui.ob===1)return `<form class="ob" id="ob">${dots}
@@ -801,11 +833,17 @@ function vOnboarding(){
 function mountOnboarding(){
   const f=document.getElementById('ob');if(!f)return;
   if(ui.ob===3)wireUsual(f,()=>ui.obIncome);
+  let t;f.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(()=>{
+    if(ui.ob===1)S.name=f.querySelector('#ob-name').value.trim();
+    if(ui.ob===2){const v=parseAmt(f.querySelector('#ob-inc').value);if(v>0)ui.obIncome=v;S.payday=f.querySelector('#ob-pay').value}
+    if(ui.ob===3)ui.obUsual=readUsual(f);
+    saveDraft()},400)});
+  f.addEventListener('change',()=>f.dispatchEvent(new Event('input')));
   f.addEventListener('submit',e=>{e.preventDefault();
     if(ui.ob===1){S.name=f.querySelector('#ob-name').value.trim();persist();ui.ob=2;render();return}
     if(ui.ob===2){const v=parseAmt(f.querySelector('#ob-inc').value);if(!(v>0)){f.querySelector('#ob-err').hidden=false;return}ui.obIncome=v;S.payday=f.querySelector('#ob-pay').value;persist();ui.ob=3;render();return}
     if(ui.ob===3){ui.obUsual=readUsual(f);ui.ob=4;render();window.scrollTo(0,0);return}
-    applyPlan(recommend(ui.obIncome,S.txns,ui.obUsual),ui.obIncome,ui.obUsual);S.onboarded=true;persist();ui.view='inicio';render();toast('All set! Tap "I spent money" whenever you buy something.',3500);
+    applyPlan(recommend(ui.obIncome,S.txns,ui.obUsual),ui.obIncome,ui.obUsual);S.onboarded=true;delete S.obDraft;persist();ui.view='inicio';render();toast('All set! Tap "I spent money" whenever you buy something.',3500);
   });
 }
 
@@ -813,7 +851,10 @@ function mountOnboarding(){
 const NAV=[['inicio','Home','home'],['gastos','Spending','pie'],['presupuesto','Budget','bulb'],['metas','Goals','target'],['patrimonio','My Money','wallet']];
 function render(){
   const nav=document.querySelector('.nav'),fab=document.getElementById('fab');
-  if(!S.onboarded){document.getElementById('app').innerHTML=vOnboarding();nav.hidden=true;fab.hidden=true;mountOnboarding();return}
+  if(!S.onboarded){nav.hidden=true;fab.hidden=true;
+    if(needInstall()){document.getElementById('app').innerHTML=vInstall();return}
+    if(ui.ob>1||ui.obIncome)saveDraft();
+    document.getElementById('app').innerHTML=vOnboarding();mountOnboarding();return}
   nav.hidden=false;
   const v={inicio:vInicio,gastos:vGastos,presupuesto:vPresupuesto,metas:vMetas,patrimonio:vPatrimonio}[ui.view]||vInicio;
   document.getElementById('app').innerHTML=v();
@@ -1067,6 +1108,10 @@ document.addEventListener('click',e=>{
     case 'newdebt':return acctSheet(null,'tarjeta');
     case 'newgoal':return goalSheet();
     case 'ob-back':{const f=document.getElementById('ob');if(ui.ob===3&&f)ui.obUsual=readUsual(f);ui.ob=Math.max(1,ui.ob-1);return render()}
+    case 'install-skip':ui.skipInstall=true;return render();
+    case 'copy-link':{const done=()=>{el.textContent='Copied! Now paste it in Safari'};
+      try{navigator.clipboard.writeText(location.href.split('#')[0]).then(done,()=>{el.textContent=location.href.split('#')[0]})}catch(e){el.textContent=location.href.split('#')[0]}
+      return}
     case 'ob-skip':ui.obUsual={};ui.ob=4;render();window.scrollTo(0,0);return;
     case 'sample':{const name=S.name;S=makeSample();S.name=name;persist();ui.view='inicio';render();toast('This is example money. Tap "Start my own" when you\'re ready.',3500);return}
     case 'clear':
