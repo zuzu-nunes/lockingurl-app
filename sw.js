@@ -1,5 +1,5 @@
-// Caches the app shell so LempiraFlow opens without internet. Bump VERSION on every release.
-const VERSION = 'lempiraflow-v8';
+// Caches the app shell so lockinGURL opens without internet. Bump VERSION on every release.
+const VERSION = 'lempiraflow-v9';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {

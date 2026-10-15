@@ -1,6 +1,6 @@
 {
-  "name": "LempiraFlow",
-  "short_name": "LempiraFlow",
+  "name": "lockinGURL",
+  "short_name": "lockinGURL",
   "description": "Personal finance in Honduran lempiras: budget, spending, net worth and goals.",
   "start_url": "./",
   "scope": "./",

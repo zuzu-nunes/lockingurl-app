@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="LempiraFlow">
+<meta name="apple-mobile-web-app-title" content="lockinGURL">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#FBF8F7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#151113" media="(prefers-color-scheme: dark)">
@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
-<title>LempiraFlow</title>
+<title>lockinGURL</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..600&family=DM+Sans:opsz,wght@9..40,400..700&display=swap">
@@ -616,7 +616,7 @@ function vInicio(){
     const left=S.budget-out,daysLeft=daysIn(y,m)-n.getDate()+1,perDay=Math.max(0,left)/daysLeft;
     const expected=S.budget*n.getDate()/daysIn(y,m);
     const st=left<0?'over':out>expected*1.1?'warn':'ok';
-    const msg={ok:"You're on track. Nice!",warn:"You're spending a bit fast. Try to slow down.",over:'You went over your budget this month.'}[st];
+    const msg={ok:"You're on track. Nice! 🕺",warn:"You're spending a bit fast. Try to slow down.",over:'You went over your budget this month.'}[st];
     hero=`<section class="hero">
       <div><div class="label">You can spend today</div><div class="big num">${L(perDay,0)}</div>
       <div class="usd num">${left>=0?`${L(left,0)} left for the rest of ${MES[m]} (${daysLeft} ${daysLeft===1?'day':'days'})`:`${L(-left,0)} over your ${MES[m]} budget`}</div></div>
@@ -629,7 +629,7 @@ function vInicio(){
   }
   const tip=homeTip(y,m);
   return `
-  <div class="title-row greet"><div><h1>${hi}${S.name?', '+esc(S.name):''}</h1><p>${today}</p></div>
+  <div class="title-row greet"><div><h1>${hi}${S.name?', '+esc(S.name):''} ✨</h1><p>${today}</p></div>
     <button class="round plain" data-act="settings" aria-label="Settings">${icon('gear')}</button></div>
   ${sampleBanner()}
   ${hero}
@@ -735,7 +735,7 @@ function vMetas(){
     return `<section class="card goal">
       <div class="top"><div><h3>${esc(g.name)}</h3><p class="sub num">${L(g.saved,0)} of ${L(g.target,0)}${due?` · by ${MES3[due.getMonth()]} ${due.getDate()}, ${due.getFullYear()}`:''}</p></div><span class="pct num">${Math.round(pct)}%</span></div>
       <div class="bar thin"><i style="width:${pct}%"></i></div>
-      ${need>0?`<p class="hint num">${months?`Save <b>${L(need/months,0)}</b> a month to reach it on time.`:`${L(need,0)} to go.`}</p>`:`<span class="pill">Goal reached!</span>`}
+      ${need>0?`<p class="hint num">${months?`Save <b>${L(need/months,0)}</b> a month to reach it on time.`:`${L(need,0)} to go.`}</p>`:`<span class="pill">Goal reached! 🪩</span>`}
       <div class="btns"><button class="btn primary" data-abono="${g.id}">Add money</button><button class="btn" data-goal="${g.id}">Edit</button></div>
     </section>`};
   return `<div class="title-row"><h1>Goals</h1><button class="round" data-act="newgoal" aria-label="New goal">${icon('plus')}</button></div>
@@ -786,7 +786,7 @@ function vInstall(){
   const step=(n,html)=>`<li><span class="inum">${n}</span><span>${html}</span></li>`;
   return `<div class="ob">
     <div class="ob-mark">${icon('phone')}</div>
-    <h1>Hi ${esc(S.name||DEFAULT_NAME)}! First, add LempiraFlow to your Home Screen</h1>
+    <h1>Hi ${esc(S.name||DEFAULT_NAME)}! ✨ First, add lockinGURL to your Home Screen</h1>
     <p class="lead">That way it opens like a normal app and remembers everything. You'll only set it up once.</p>
     ${IN_SAFARI?'':`<section class="card inote"><b>You're inside another app, like WhatsApp.</b>
       <span>Tap the <b>Safari</b> compass or the <b>⋯</b> button and choose <b>Open in Safari</b>. Or copy the link and paste it in Safari.</span>
@@ -794,7 +794,7 @@ function vInstall(){
     <section class="card"><ol class="isteps">
       ${step(1,`In Safari, tap the <b>Share</b> button ${icon('share','inline')} at the bottom of the screen.`)}
       ${step(2,`Scroll down and tap <b>Add to Home Screen</b>.`)}
-      ${step(3,`Tap <b>Add</b>, then open <b>LempiraFlow</b> from your Home Screen.`)}
+      ${step(3,`Tap <b>Add</b>, then open <b>lockinGURL</b> from your Home Screen.`)}
     </ol></section>
     <button class="link center" type="button" data-act="install-skip">Continue here anyway</button>
   </div>`;
@@ -804,7 +804,7 @@ function vOnboarding(){
   const dots=`<div class="ob-dots" aria-label="Step ${ui.ob} of 4">${[1,2,3,4].map(i=>`<i class="${i<=ui.ob?'on':''}"></i>`).join('')}</div>`;
   if(ui.ob===1)return `<form class="ob" id="ob">${dots}
     <div class="ob-mark">${icon('wallet')}</div>
-    <h1>Hi ${esc(S.name||DEFAULT_NAME)}! Let's set up your money.</h1>
+    <h1>Hi ${esc(S.name||DEFAULT_NAME)}! Let's set up your money ✨</h1>
     <p class="lead">It takes two minutes. Everything stays on your phone.</p>
     <div class="field"><label for="ob-name">What's your name?</label><input id="ob-name" maxlength="30" autocomplete="given-name" value="${esc(S.name)}" placeholder="Your name"></div>
     <button class="btn primary wide xl" type="submit">Next</button>
@@ -845,7 +845,7 @@ function mountOnboarding(){
     if(ui.ob===1){S.name=f.querySelector('#ob-name').value.trim();persist();ui.ob=2;render();return}
     if(ui.ob===2){const v=parseAmt(f.querySelector('#ob-inc').value);if(!(v>0)){f.querySelector('#ob-err').hidden=false;return}ui.obIncome=v;S.payday=f.querySelector('#ob-pay').value;persist();ui.ob=3;render();return}
     if(ui.ob===3){ui.obUsual=readUsual(f);ui.ob=4;render();window.scrollTo(0,0);return}
-    applyPlan(recommend(ui.obIncome,S.txns,ui.obUsual),ui.obIncome,ui.obUsual);S.onboarded=true;delete S.obDraft;persist();ui.view='inicio';render();toast('All set! Tap "I spent money" whenever you buy something.',3500);
+    applyPlan(recommend(ui.obIncome,S.txns,ui.obUsual),ui.obIncome,ui.obUsual);S.onboarded=true;delete S.obDraft;persist();ui.view='inicio';render();toast('All set! 🪩 Tap "I spent money" whenever you buy something.',3500);
   });
 }
 
@@ -928,7 +928,7 @@ function addSheet(type,cat){
       S.txns.push(rec);applyToAcct(rec,1);S.lastAcct=acct;persist();closeSheet();render();
       if(type==='gasto'&&S.catBudgets?.[cat]){const c=catLeft(cat);
         toast(c.spent<=c.limit?`Saved! ${L(c.limit-c.spent,0)} left for ${lower(meta.n)} this month.`:`Saved. You're ${L(c.spent-c.limit,0)} over on ${lower(meta.n)} this month.`,3200)}
-      else toast(type==='ingreso'?'Nice! Money in saved.':'Saved!');
+      else toast(type==='ingreso'?'Nice! Money in saved 🪩':'Saved!');
     });
   });
 }
@@ -981,7 +981,7 @@ function helperSheet(){
     wireUsual(form,()=>parseAmt(inc.value));
     edit.addEventListener('click',()=>{rec=null;out.innerHTML='';ask.hidden=false;edit.hidden=true;btn.textContent='Make my budget'});
     form.addEventListener('submit',e=>{e.preventDefault();
-      if(rec){applyPlan(rec,income,usual);persist();closeSheet();go_('presupuesto');toast('Your new budget is ready.');return}
+      if(rec){applyPlan(rec,income,usual);persist();closeSheet();go_('presupuesto');toast('Your new budget is ready ✨');return}
       income=parseAmt(inc.value);if(!(income>0)){form.querySelector('#h-err').hidden=false;return}
       form.querySelector('#h-err').hidden=true;usual=readUsual(form);
       rec=recommend(income,S.txns,usual);
@@ -1054,7 +1054,7 @@ function abonoSheet(id){
   form=>{
     form.querySelectorAll('[data-q]').forEach(b=>b.addEventListener('click',()=>{form.querySelector('#b-amt').value=b.dataset.q}));
     form.addEventListener('submit',e=>{e.preventDefault();const v=parseAmt(form.querySelector('#b-amt').value);if(!(v>0))return;
-      g.saved=r2(g.saved+v);persist();closeSheet();render();toast(`Added ${L(v,0)}. Great job!`)});
+      g.saved=r2(g.saved+v);persist();closeSheet();render();toast(`Added ${L(v,0)}. Great job! 🕺`)});
   });
 }
 function settingsSheet(){
@@ -1123,9 +1123,9 @@ document.addEventListener('click',e=>{
   }
 });
 async function exportBackup(){
-  const name=`lempiraflow-backup-${todayISO()}.json`;
+  const name=`lockingurl-backup-${todayISO()}.json`;
   const file=new File([JSON.stringify(S,null,1)],name,{type:'application/json'});
-  try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'LempiraFlow backup'});return}}catch(e){if(e.name==='AbortError')return}
+  try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'lockinGURL backup'});return}}catch(e){if(e.name==='AbortError')return}
   const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=name;document.body.appendChild(a);a.click();
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
 }
@@ -1134,7 +1134,7 @@ function importBackup(file,msg){
   const r=new FileReader();
   r.onload=()=>{try{const d=JSON.parse(r.result);if(!d||!Array.isArray(d.txns)||!Array.isArray(d.accounts))throw 0;
       S=d;if(S.onboarded===undefined)S.onboarded=true;applySkin();persist();closeSheet();render();toast('Backup restored')}
-    catch(e){msg.hidden=false;msg.style.color='var(--danger)';msg.textContent='That file is not a LempiraFlow backup. Pick a file you saved from this app.'}};
+    catch(e){msg.hidden=false;msg.style.color='var(--danger)';msg.textContent='That file is not a lockinGURL backup. Pick a file you saved from this app.'}};
   r.readAsText(file);
 }
 render();

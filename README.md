@@ -1,4 +1,4 @@
-# LempiraFlow
+# lockinGURL
 
 Personal finance app in Honduran lempiras (budget, spending by category, net worth, goals, insights). A Home Screen web app: open the site in Safari on iPhone, tap Share, then Add to Home Screen.
 
