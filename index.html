@@ -199,7 +199,9 @@ button{cursor:pointer}
 .cta{gap:10px}.cta .sub{font-size:14.5px}
 .card.flat{box-shadow:none;border:1px solid var(--line)}
 .plan-top{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.plan-top div{background:var(--card2);border-radius:14px;padding:10px 12px}
+.plan-top div,.plan-top button{background:var(--card2);border-radius:14px;padding:10px 12px}
+.plan-top button{border:1px solid var(--line);text-align:left}
+.plan-top .ic{width:13px;height:13px;vertical-align:-2px}
 .plan-top span{display:block;font-size:12.5px;color:var(--muted);font-weight:600}
 .plan-top b{font-family:var(--display);font-size:20px}
 .plan-top .save b{color:var(--accent)}
@@ -289,6 +291,8 @@ button{cursor:pointer}
 .nav button[aria-current="page"]::after{content:"";width:4px;height:4px;border-radius:50%;background:currentColor}
 .sample{background:var(--card2);border:1px solid var(--line)}
 .bigbtn.in .bb-ic{background:color-mix(in srgb,var(--good) 14%,transparent);color:var(--good)}
+.pcts{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.pcts .q{padding:9px 0}
 .tr-btns{display:flex;gap:8px;align-items:center}
 .curpill{border:1px solid var(--line);background:none;border-radius:99px;height:40px;padding:0 4px;display:flex;align-items:center;gap:2px;font-weight:700;font-size:14px}
 .curpill span{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:var(--muted)}
@@ -355,6 +359,7 @@ const ALT=n=>inUSD()?'L\u00a0'+nf0.format(Math.round(n)):'$\u00a0'+nf0.format(Ma
 const PH=()=>SYM()+' 0';
 // An untouched amount field gives back its exact lempira value (no rounding drift through dollars).
 const amtAttrs=n=>`value="${fmtIn(n)}" data-l="${n||''}"`;
+const setAmt=(i,n)=>{i.value=i.defaultValue=fmtIn(n);i.dataset.l=n||''};
 const MES=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MES3=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const pad=n=>String(n).padStart(2,'0');
@@ -416,11 +421,14 @@ function history(txns){
   if(months)Object.keys(avg).forEach(k=>avg[k]/=months);
   return {avg,months,income:months?inc/months:0};
 }
-function recommend(income,txns,usual){
+const autoRate=income=>income<12000?.10:income<25000?.15:.20;
+const autoSave=income=>round50(income*autoRate(income));
+// goal: how much she wants to save each month (0 = let the app pick by income).
+function recommend(income,txns,usual,goal){
   const h=history(txns);
   const told=!!usual&&Object.values(usual).some(v=>v>0);
-  const saveRate=income<12000?.10:income<25000?.15:.20;
-  const target=income*saveRate,spend=income-target;
+  const custom=goal>0&&goal<income;
+  const target=custom?goal:income*autoRate(income),spend=income-target;
   const cats={},notes=[];
   const tot=()=>Object.values(cats).reduce((a,b)=>a+b,0);
   // Cut these categories evenly (each by at most maxCut of itself) until spending fits.
@@ -431,14 +439,14 @@ function recommend(income,txns,usual){
   const share=k=>(SHARE[k]??.04)/shareSum;   // her own categories start with a small slice
   const wants=keys.filter(k=>!isNeed(k));
   const flex=keys.filter(k=>isNeed(k)&&!isFixed(k));
-  let stated=0;
+  let stated=0,addedBuf=false;
   if(told){
     // Start from what she says she spends, then make room for savings: extras first, a little off food and transport.
     for(const k of keys)cats[k]=usual[k]||0;
     stated=tot();
     const buffer=round50(income*.03);
-    if(cats.otros<buffer&&tot()+buffer-cats.otros<=income){notes.push(`I added ${L(buffer-cats.otros,0)} under Other for surprises, like a gift or a repair.`);cats.otros=buffer}
-    trim(wants,.5);trim(flex,.1);
+    if(cats.otros<buffer&&tot()+buffer-cats.otros<=income){addedBuf=true;cats.otros=buffer}
+    if(custom){trim(wants,.7);trim(flex,.25)}else{trim(wants,.5);trim(flex,.1)}
     trim(Object.keys(cats).filter(k=>!isFixed(k)),1,income); // never plan more than she gets
   }else{
     for(const k of keys){
@@ -448,13 +456,16 @@ function recommend(income,txns,usual){
       else if(!isNeed(k))v=Math.min(v,base); // never plan more fun money than the rule allows
       cats[k]=v;
     }
-    trim(wants,.5);trim(Object.keys(cats).filter(k=>!isFixed(k)),1);
+    if(custom){trim(wants,.7);trim(flex,.25)}else{trim(wants,.5);trim(Object.keys(cats).filter(k=>!isFixed(k)),1)}
   }
   for(const k in cats)cats[k]=Math.max(0,isFixed(k)?Math.ceil(cats[k]/50)*50:round50(cats[k]));
   const extra=tot()-income;
   if(extra>0){const k=Object.keys(cats).filter(x=>!isFixed(x)).sort((a,b)=>cats[b]-cats[a])[0];if(k)cats[k]=Math.max(0,cats[k]-extra)}
+  if(addedBuf&&cats.otros>0&&!(usual.otros>=cats.otros))notes.push(`I set aside ${L(cats.otros,0)} under Other for surprises, like a gift or a repair.`);
+  // Rounding to L 50 can leave her goal a little short; take that small gap from the biggest flexible category.
+  if(custom){const gap=tot()-spend;if(gap>0&&gap<=50*keys.length){const k=Object.keys(cats).filter(x=>!isFixed(x)).sort((a,b)=>cats[b]-cats[a])[0];if(k)cats[k]=Math.max(0,cats[k]-gap)}}
   const total=tot(),save=Math.max(0,income-total);
-  const why=save>=target-50?'so you can save every month':'so it fits your pay';
+  const why=save>=target-50?(custom?`so you can save ${L(goal,0)}`:'so you can save every month'):'so it fits your pay';
   if(told){
     for(const k of keys)if(usual[k]&&cats[k]<usual[k]-25)notes.push(`${CATS[k].n}: you said ${L(usual[k],0)}. I set ${L(cats[k],0)} ${why}.`);
     notes.unshift(stated>income
@@ -469,8 +480,11 @@ function recommend(income,txns,usual){
       ?`Based on what you earn and what you spent in the last ${h.months===1?'month':h.months+' months'}.`
       :'Most of your money goes to needs like rent and food, a little goes to fun, and some gets saved every month. Tell me what you really spend and I can fit it better.');
   }
-  if(save<income*.05)notes.push('Your bills take almost everything you get right now, so there is little left to save. Even '+(inUSD()?'$ 5':'L 100')+' a week adds up.');
-  return {cats,total,save,notes};
+  if(custom)notes[0]=save>=goal-50
+    ?`You'll save ${L(goal,0)} a month, like you asked${save>goal+50?`, plus ${L(save-goal,0)} extra`:''}. Here's how the rest of your money is split.`
+    :`Saving ${L(goal,0)} would mean cutting food and bills too far. This plan saves ${L(save,0)}, the most that still feels livable. To reach ${L(goal,0)} you'd need ${L(goal-save,0)} more a month, from a cheaper bill or extra income.`;
+  if(!custom&&save<income*.05)notes.push('Your bills take almost everything you get right now, so there is little left to save. Even '+(inUSD()?'$ 5':'L 100')+' a week adds up.');
+  return {cats,total,save,notes,goal:custom?goal:0};
 }
 // "What do you usually spend?" form, shared by setup and the Budget tab.
 const HINTS={vivienda:'Rent or house payment',comida:'Supermarket, pulpería, eating out',transporte:'Bus, taxi, gas',servicios:'Electricity, water, internet, phone',salud:'Pharmacy, doctor',compras:'Clothes, beauty, things for the house',ocio:'Going out, movies, streaming',otros:'Gifts, church, anything else'};
@@ -499,7 +513,7 @@ function recPlan(rec){
     <ul class="reclist num">${rows.map(([k,v])=>`<li>${badge(CATS[k])}<span>${CATS[k].n}</span><b>${L(v,0)}</b></li>`).join('')}</ul>
     ${rec.notes.map(n=>`<p class="tip">${icon('bulb')}<span>${n}</span></p>`).join('')}`;
 }
-function applyPlan(rec,income,usual){S.income=income;S.catBudgets={...rec.cats};S.budget=rec.total;S.saveTarget=rec.save;if(usual&&Object.keys(usual).length)S.usual={...usual}}
+function applyPlan(rec,income,usual){S.income=income;S.catBudgets={...rec.cats};S.budget=rec.total;S.saveTarget=rec.save;S.saveGoal=rec.goal||0;if(usual&&Object.keys(usual).length)S.usual={...usual}}
 
 /* ---------- sample data ---------- */
 function makeSample(){
@@ -557,11 +571,11 @@ function blankState(prev){return {v:2,sample:false,onboarded:false,name:prev?.na
 let S=null;
 const LS='lempiraflow:v1';
 const VIEWS=['inicio','gastos','presupuesto','metas','patrimonio'];
-const ui={view:'inicio',y:new Date().getFullYear(),m:new Date().getMonth(),filter:'gasto',ob:1,obIncome:0,obUsual:null};
+const ui={view:'inicio',y:new Date().getFullYear(),m:new Date().getMonth(),filter:'gasto',ob:1,obIncome:0,obUsual:null,obSave:0};
 try{const v=localStorage.getItem('lempiraflow:view');if(VIEWS.includes(v))ui.view=v}catch(e){}
 try{const raw=localStorage.getItem(LS);if(raw)S=JSON.parse(raw)}catch(e){}
 if(!S||!Array.isArray(S.txns))S=blankState();
-if(!S.onboarded&&S.obDraft){ui.ob=S.obDraft.ob||1;ui.obIncome=S.obDraft.income||0;ui.obUsual=S.obDraft.usual||null}
+if(!S.onboarded&&S.obDraft){ui.ob=S.obDraft.ob||1;ui.obIncome=S.obDraft.income||0;ui.obUsual=S.obDraft.usual||null;ui.obSave=S.obDraft.save||0}
 function normalize(){
   if(S.onboarded===undefined)S.onboarded=true;   // data saved by the first version
   if(S.income===undefined)S.income=0;
@@ -749,9 +763,10 @@ function vPresupuesto(){
   return `<div class="title-row"><h1>Budget</h1><button class="round plain" data-act="settings" aria-label="Settings">${icon('gear')}</button></div>
   ${monthNav()}
   <section class="card">
-    <div class="plan-top num"><div><span>Plan to spend</span><b>${L(S.budget,0)}</b></div><div class="save"><span>Plan to save</span><b>${L(S.saveTarget||0,0)}</b></div></div>
+    <div class="plan-top num"><div><span>Plan to spend</span><b>${L(S.budget,0)}</b></div><button class="save" data-act="savegoal" aria-label="Change how much you save"><span>Plan to save ${icon('pencil')}</span><b>${L(S.saveTarget||0,0)}</b></button></div>
     <div class="bar ${out>S.budget?'over':''}"><i style="width:${Math.min(100,out/S.budget*100||0)}%"></i></div>
     <p class="sub num">${L(out,0)} spent so far in ${MES[ui.m]}</p>
+    ${saveStatus(out)}
   </section>
   <section class="card"><div class="row"><h2>By category</h2><span class="sub">Tap one to change it</span></div>
     <div class="list">${rows}</div>
@@ -852,7 +867,7 @@ function vInstall(){
     <button class="link center" type="button" data-act="install-skip">Continue here anyway</button>
   </div>`;
 }
-function saveDraft(){S.obDraft={ob:ui.ob,income:ui.obIncome,usual:ui.obUsual};persist()}
+function saveDraft(){S.obDraft={ob:ui.ob,income:ui.obIncome,usual:ui.obUsual,save:ui.obSave};persist()}
 function vOnboarding(){
   const dots=`<div class="ob-dots" aria-label="Step ${ui.ob} of 4">${[1,2,3,4].map(i=>`<i class="${i<=ui.ob?'on':''}"></i>`).join('')}</div>`;
   if(ui.ob===1)return `<form class="ob" id="ob">${dots}
@@ -881,17 +896,28 @@ function vOnboarding(){
     <button class="btn primary wide xl" type="submit">Make my budget</button>
     <button class="link center" type="button" data-act="ob-skip">I'm not sure, skip this</button>
     <button class="link center" type="button" data-act="ob-back">Back</button></form>`;
-  const rec=recommend(ui.obIncome,S.txns,ui.obUsual);
+  const rec=recommend(ui.obIncome,S.txns,ui.obUsual,ui.obSave);
   return `<form class="ob" id="ob">${dots}
     <h1>Here's your budget${S.name?', '+esc(S.name):''}</h1>
     <p class="lead num">From ${L(ui.obIncome,0)} a month. You can change any number later in the Budget tab.</p>
+    <section class="card"><div class="field"><label for="ob-save">How much do you want to save each month? (${CUR_WORD()})</label>
+      <input id="ob-save" class="amount-in num" inputmode="decimal" placeholder="${PH()}" ${amtAttrs(ui.obSave||rec.save)}></div>
+      ${saveChips()}
+      <p class="hint" id="ob-serr" hidden style="color:var(--danger)"></p>
+      <button type="button" class="btn wide" data-act="ob-resave">Recalculate my budget</button></section>
     <section class="card">${recPlan(rec)}</section>
     <button class="btn primary wide xl" type="submit">Use this budget</button>
     <button class="link center" type="button" data-act="ob-back">Back</button></form>`;
 }
+function obResave(f){
+  const v=readAmt(f.querySelector('#ob-save')),err=f.querySelector('#ob-serr');
+  if(v>=ui.obIncome){err.hidden=false;err.textContent=`That's all of your money. Pick less than ${L(ui.obIncome,0)}.`;return}
+  ui.obSave=v>0?v:0;saveDraft();render();toast('Budget recalculated ✨');
+}
 function mountOnboarding(){
   const f=document.getElementById('ob');if(!f)return;
   if(ui.ob===3)wireUsual(f,()=>ui.obIncome);
+  if(ui.ob===4)f.querySelectorAll('[data-p]').forEach(b=>b.addEventListener('click',()=>{ui.obSave=round50(ui.obIncome*+b.dataset.p);saveDraft();render()}));
   const rf=f.querySelector('#ob-restore');if(rf)rf.addEventListener('change',e=>importBackup(e.target.files[0],f.querySelector('#ob-rmsg')));
   let t;f.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(()=>{
     if(ui.ob===1)S.name=f.querySelector('#ob-name').value.trim();
@@ -903,7 +929,10 @@ function mountOnboarding(){
     if(ui.ob===1){S.name=f.querySelector('#ob-name').value.trim();persist();ui.ob=2;render();return}
     if(ui.ob===2){const v=readAmt(f.querySelector('#ob-inc'));if(!(v>0)){f.querySelector('#ob-err').hidden=false;return}ui.obIncome=v;S.payday=f.querySelector('#ob-pay').value;persist();ui.ob=3;render();return}
     if(ui.ob===3){ui.obUsual=readUsual(f);ui.ob=4;render();window.scrollTo(0,0);return}
-    applyPlan(recommend(ui.obIncome,S.txns,ui.obUsual),ui.obIncome,ui.obUsual);S.onboarded=true;delete S.obDraft;persist();ui.view='inicio';render();toast('All set! 🪩 Tap "I spent money" whenever you buy something.',3500);
+    // A new amount typed but not recalculated yet: show that plan first instead of saving one she hasn't seen.
+    const sv=readAmt(f.querySelector('#ob-save')),shown=recommend(ui.obIncome,S.txns,ui.obUsual,ui.obSave).save;
+    if(sv>0&&Math.abs(sv-shown)>1)return obResave(f);
+    applyPlan(recommend(ui.obIncome,S.txns,ui.obUsual,ui.obSave),ui.obIncome,ui.obUsual);S.onboarded=true;delete S.obDraft;persist();ui.view='inicio';render();toast('All set! 🪩 Tap "I spent money" whenever you buy something.',3500);
   });
 }
 
@@ -1024,12 +1053,57 @@ function txSheet(id){
     });
   },false);
 }
+const saveChips=()=>`<div class="qs pcts">${[.1,.15,.2,.25,.3].map(p=>`<button type="button" class="q" data-p="${p}">${Math.round(p*100)}%</button>`).join('')}</div>`;
+function saveHint(inc,sv){
+  if(!inc)return '';
+  if(!sv)return `Leave it empty and I'll pick about ${L(autoSave(inc),0)} (${Math.round(autoRate(inc)*100)}% of what you get).`;
+  if(sv>=inc)return `<span style="color:var(--danger)">That's all of your money or more. Pick less than ${L(inc,0)}.</span>`;
+  return `That's ${Math.round(sv/inc*100)}% of what you get. I'll fit everything else around it.`;
+}
+// Change only the savings amount; the app rebalances the categories around it.
+function saveSheet(){
+  const inc=S.income||Math.round(history(S.txns).income);
+  if(!inc)return helperSheet();
+  openSheet(`<div class="row"><h2>How much to save</h2>${close}</div>
+    <p class="sub num">You get ${L(inc,0)} a month. Pick how much to put away and I'll fit your budget around it.</p>
+    <div class="field"><label for="v-amt">Save each month (${CUR_WORD()})</label><input id="v-amt" class="amount-in num" inputmode="decimal" placeholder="${PH()}" ${amtAttrs(S.saveGoal||S.saveTarget||autoSave(inc))}></div>
+    ${saveChips()}
+    <p class="hint num" id="v-hint"></p>
+    <div id="v-out"></div>
+    <button class="btn primary wide xl" type="submit" id="v-go">See my new budget</button>
+    ${S.saveGoal?'<button type="button" class="link center" id="v-auto">Let the app pick for me</button>':''}`,
+  form=>{
+    const a=form.querySelector('#v-amt'),out=form.querySelector('#v-out'),btn=form.querySelector('#v-go'),hint=form.querySelector('#v-hint');
+    let rec=null;
+    const reset=()=>{rec=null;out.innerHTML='';btn.textContent='See my new budget';hint.innerHTML=saveHint(inc,readAmt(a))};
+    const preview=goal=>{rec=recommend(inc,S.txns,S.usual,goal);out.innerHTML=`<section class="card flat">${recPlan(rec)}</section>`;btn.textContent='Use this budget'};
+    a.addEventListener('input',reset);reset();
+    form.querySelectorAll('[data-p]').forEach(b=>b.addEventListener('click',()=>{setAmt(a,round50(inc*+b.dataset.p));reset();preview(readAmt(a))}));
+    const au=form.querySelector('#v-auto');if(au)au.addEventListener('click',()=>{setAmt(a,0);reset();preview(0)});
+    form.addEventListener('submit',e=>{e.preventDefault();
+      if(rec){applyPlan(rec,inc,null);persist();closeSheet();render();toast(`Budget updated: saving ${L(rec.save,0)} a month ✨`,3000);return}
+      const g=readAmt(a);if(g>=inc){hint.innerHTML=saveHint(inc,g);return}
+      preview(g);document.activeElement&&document.activeElement.blur();
+    });
+  },false);
+}
+function saveStatus(out){
+  if(!isCurrent()||!S.income)return '';
+  const goal=S.saveGoal||0,plan=Math.max(0,S.income-S.budget),will=Math.max(0,S.income-Math.max(out,S.budget));
+  if(out>S.budget)return `<p class="tip bad">${icon('bulb')}<span>You're ${L(out-S.budget,0)} over your plan, so you'll save about ${L(will,0)} this month${goal?` instead of ${L(goal,0)}`:''}. Spend as little as you can until payday.</span></p>`;
+  if(goal&&plan<goal-50)return `<p class="tip warn">${icon('bulb')}<span>Your limits now add up to more than before, so you'd save ${L(plan,0)}, not ${L(goal,0)}. Tap <b>Plan to save</b> to rebalance.</span></p>`;
+  if(goal)return `<p class="tip">${icon('bulb')}<span>On track to save your ${L(goal,0)} this month 🪩</span></p>`;
+  return '';
+}
 function helperSheet(){
   const est=S.income||Math.round(history(S.txns).income)||DEFAULT_INCOME;
   openSheet(`<div class="row"><h2>Fit my budget</h2>${close}</div>
     <div id="h-ask" class="stack">
       <p class="sub">Tell me what you get and what you usually spend. I'll make a budget that fits your real life.</p>
       <div class="field"><label for="h-inc">Money in per month (${CUR_WORD()})</label><input id="h-inc" class="amount-in num" inputmode="decimal" placeholder="${PH()}" ${amtAttrs(est)}></div>
+      <div class="field"><label for="h-save">How much do you want to save each month? (${CUR_WORD()})</label><input id="h-save" class="amount-in num" inputmode="decimal" placeholder="${PH()}" ${amtAttrs(S.saveGoal)}></div>
+      ${saveChips()}
+      <p class="hint num" id="h-shint"></p>
       <h3 class="sh">What you usually spend each month</h3>
       ${usualFields(usualPrefill())}
     </div>
@@ -1041,12 +1115,17 @@ function helperSheet(){
     const inc=form.querySelector('#h-inc'),ask=form.querySelector('#h-ask'),out=form.querySelector('#h-out'),btn=form.querySelector('#h-go'),edit=form.querySelector('#h-edit');
     let rec=null,income=0,usual={};
     wireUsual(form,()=>readAmt(inc));
+    const sv=form.querySelector('#h-save'),sh=form.querySelector('#h-shint');
+    const shint=()=>{sh.innerHTML=saveHint(readAmt(inc),readAmt(sv))};
+    inc.addEventListener('input',shint);sv.addEventListener('input',shint);shint();
+    form.querySelectorAll('[data-p]').forEach(b=>b.addEventListener('click',()=>{setAmt(sv,round50(readAmt(inc)*+b.dataset.p));shint()}));
     edit.addEventListener('click',()=>{rec=null;out.innerHTML='';ask.hidden=false;edit.hidden=true;btn.textContent='Make my budget'});
     form.addEventListener('submit',e=>{e.preventDefault();
       if(rec){applyPlan(rec,income,usual);persist();closeSheet();go_('presupuesto');toast('Your new budget is ready ✨');return}
       income=readAmt(inc);if(!(income>0)){form.querySelector('#h-err').hidden=false;return}
       form.querySelector('#h-err').hidden=true;usual=readUsual(form);
-      rec=recommend(income,S.txns,usual);
+      const goal=readAmt(sv);if(goal>=income){shint();sv.focus();return}
+      rec=recommend(income,S.txns,usual,goal);
       out.innerHTML=`<section class="card flat">${recPlan(rec)}</section>`;ask.hidden=true;edit.hidden=false;btn.textContent='Use this budget';
       document.activeElement&&document.activeElement.blur();form.scrollTop=0;
     });
@@ -1125,7 +1204,7 @@ function catEditSheet(k,back){
   },false);
 }
 function catSheet(k){
-  const cur=S.catBudgets?.[k]||0,rec=S.income?recommend(S.income,S.txns).cats[k]:null;
+  const cur=S.catBudgets?.[k]||0,rec=S.income?recommend(S.income,S.txns,S.usual,S.saveGoal).cats[k]:null;
   openSheet(`<div class="row"><h2>${CATS[k].n}</h2>${close}</div>
     <div class="field"><label for="c-amt">Monthly limit (${CUR_WORD()})</label><input id="c-amt" class="amount-in num" inputmode="decimal" ${amtAttrs(cur)} placeholder="${PH()}"></div>
     ${rec!=null?`<p class="hint num">Recommended for you: <b>${L(rec,0)}</b> <button type="button" class="link" id="c-rec">Use it</button></p>`:''}
@@ -1217,7 +1296,7 @@ function settingsSheet(){
     form.querySelector('#s-cats').addEventListener('click',catsSheet);
     form.querySelector('#s-export').addEventListener('click',exportBackup);
     form.querySelector('#s-import').addEventListener('change',e=>importBackup(e.target.files[0],form.querySelector('#s-msg')));
-    deleteBtn(()=>{S=blankState(S);ui.ob=1;ui.obIncome=0;persist();closeSheet();render()},'Tap again to erase everything')(form.querySelector('#s-clear'));
+    deleteBtn(()=>{S=blankState(S);ui.ob=1;ui.obIncome=0;ui.obSave=0;persist();closeSheet();render()},'Tap again to erase everything')(form.querySelector('#s-clear'));
     deleteBtn(()=>{const name=S.name,cur=S.cur;S=makeSample();S.name=name;S.cur=cur;persist();closeSheet();render();toast('Showing example money')},'Tap again: this replaces your data')(form.querySelector('#s-sample'));
     form.addEventListener('submit',e=>{e.preventDefault();
       S.name=form.querySelector('#s-name').value.trim();
@@ -1248,6 +1327,7 @@ document.addEventListener('click',e=>{
     case 'settings':return settingsSheet();
     case 'helper':return helperSheet();
     case 'cats':return catsSheet();
+    case 'savegoal':return saveSheet();
     case 'cur':return setCur(inUSD()?'HNL':'USD');
     case 'newacct':return acctSheet(null,'efectivo');
     case 'newdebt':return acctSheet(null,'tarjeta');
@@ -1257,10 +1337,11 @@ document.addEventListener('click',e=>{
     case 'copy-link':{const done=()=>{el.textContent='Copied! Now paste it in Safari'};
       try{navigator.clipboard.writeText(location.href.split('#')[0]).then(done,()=>{el.textContent=location.href.split('#')[0]})}catch(e){el.textContent=location.href.split('#')[0]}
       return}
+    case 'ob-resave':{const f=document.getElementById('ob');if(f)obResave(f);return}
     case 'ob-skip':ui.obUsual={};ui.ob=4;render();window.scrollTo(0,0);return;
     case 'sample':{const name=S.name,cur=S.cur;S=makeSample();S.name=name;S.cur=cur;persist();ui.view='inicio';render();toast('This is example money. Tap "Start my own" when you\'re ready.',3500);return}
     case 'clear':
-      if(el.dataset.armed){S=blankState(S);ui.ob=1;ui.obIncome=0;persist();ui.view='inicio';render()}
+      if(el.dataset.armed){S=blankState(S);ui.ob=1;ui.obIncome=0;ui.obSave=0;persist();ui.view='inicio';render()}
       else{el.dataset.armed='1';el.textContent='Tap again to remove the example'}
       return;
   }
