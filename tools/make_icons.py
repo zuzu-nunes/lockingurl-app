@@ -1,4 +1,4 @@
-"""Draws the LempiraFlow app icon (green tile with a white spending ring) as PNGs, no dependencies."""
+"""Draws the LempiraFlow app icon (soft blush tile with a rose spending ring) as PNGs, no dependencies."""
 import math, struct, zlib, os
 
 OUT = os.path.join(os.path.dirname(__file__), '..', 'icons')
@@ -13,7 +13,7 @@ def png(path, size, pixels):
 def clamp(v): return max(0.0, min(1.0, v))
 
 def draw(size, maskable=False):
-    top, bot = (0x16, 0x9A, 0x67), (0x0C, 0x5E, 0x3F)
+    top, bot = (0xFB, 0xEE, 0xF1), (0xF3, 0xD6, 0xDE)
     px = bytearray(size * size * 4)
     c = size / 2
     scale = 0.78 if maskable else 1.0          # keep the ring inside the maskable safe zone
@@ -32,12 +32,12 @@ def draw(size, maskable=False):
             if rel < (gap1 - gap0): cov = 0
             col = bg
             if cov:
-                ring = (255, 255, 255) if ((a - split) % (2 * math.pi)) > math.radians(160) else (0xBF, 0xEB, 0xD6)
+                ring = (0xC2, 0x6F, 0x88) if ((a - split) % (2 * math.pi)) > math.radians(160) else (0xE8, 0xAE, 0xBF)
                 col = [bg[i] * (1 - cov) + ring[i] * cov for i in range(3)]
             # small "L" coin dot in the gap
             dd = math.hypot(dx - R * math.cos(math.radians(-55)), dy - R * math.sin(math.radians(-55)))
             dc = clamp(w * .62 - dd + .5)
-            if dc: col = [col[i] * (1 - dc) + (0xF2, 0xC1, 0x4E)[i] * dc for i in range(3)]
+            if dc: col = [col[i] * (1 - dc) + (0xE0, 0xB0, 0x6A)[i] * dc for i in range(3)]
             o = (y * size + x) * 4
             px[o:o+4] = bytes([int(col[0]), int(col[1]), int(col[2]), 255])
     return px
