@@ -10,9 +10,9 @@
 <meta name="theme-color" content="#FBF8F7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#151113" media="(prefers-color-scheme: dark)">
 <meta name="description" content="Personal finance in Honduran lempiras: budget, spending, net worth and goals.">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest?v=12">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/lg-icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/lg-icon-192.png">
 <title>lockinGURL</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -832,7 +832,10 @@ function vOnboarding(){
     <p class="lead">It takes two minutes. Everything stays on your phone.</p>
     <div class="field"><label for="ob-name">What's your name?</label><input id="ob-name" maxlength="30" autocomplete="given-name" value="${esc(S.name)}" placeholder="Your name"></div>
     <button class="btn primary wide xl" type="submit">Next</button>
-    <button class="link center" type="button" data-act="sample">Just show me an example first</button></form>`;
+    <button class="link center" type="button" data-act="sample">Just show me an example first</button>
+    <label class="link center" for="ob-restore">I have a backup, restore it</label>
+    <input type="file" id="ob-restore" accept="application/json,.json" hidden>
+    <p class="hint" id="ob-rmsg" hidden></p></form>`;
   if(ui.ob===2)return `<form class="ob" id="ob">${dots}
     <h1>How much money do you get each month?</h1>
     <p class="lead">Your pay after deductions. If you're paid every 15 days, add both paychecks together. Include any remittances.</p>
@@ -859,6 +862,7 @@ function vOnboarding(){
 function mountOnboarding(){
   const f=document.getElementById('ob');if(!f)return;
   if(ui.ob===3)wireUsual(f,()=>ui.obIncome);
+  const rf=f.querySelector('#ob-restore');if(rf)rf.addEventListener('change',e=>importBackup(e.target.files[0],f.querySelector('#ob-rmsg')));
   let t;f.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(()=>{
     if(ui.ob===1)S.name=f.querySelector('#ob-name').value.trim();
     if(ui.ob===2){const v=parseAmt(f.querySelector('#ob-inc').value);if(v>0)ui.obIncome=v;S.payday=f.querySelector('#ob-pay').value}
