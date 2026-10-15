@@ -1,5 +1,5 @@
 // Caches the app shell so lockinGURL opens without internet. Bump VERSION on every release.
-const VERSION = 'lockingurl-v12';
+const VERSION = 'lockingurl-v13';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest?v=12', 'icons/lg-icon-180.png', 'icons/lg-icon-192.png', 'icons/lg-icon-512.png', 'icons/cover.jpg'];
 
 self.addEventListener('install', e => {
