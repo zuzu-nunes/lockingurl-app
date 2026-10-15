@@ -334,6 +334,7 @@ const badge=(meta)=>`<span class="badge" style="background:color-mix(in srgb,var
 
 /* ---------- budget advice ---------- */
 // Share of spendable income per category when there is no history yet.
+const DEFAULT_PAYDAY='last'; // she's paid once a month, on the last day
 const DEFAULT_INCOME=25000; // her monthly pay, prefilled so setup is one tap
 const SHARE={vivienda:.30,comida:.25,transporte:.12,servicios:.10,salud:.05,compras:.07,ocio:.06,otros:.05};
 const NEEDS=new Set(['vivienda','comida','servicios','transporte','salud']);
@@ -494,6 +495,7 @@ try{const raw=localStorage.getItem(LS);if(raw)S=JSON.parse(raw)}catch(e){}
 if(!S||!Array.isArray(S.txns))S=blankState();
 if(S.onboarded===undefined)S.onboarded=true;   // data saved by the first version
 if(S.income===undefined)S.income=0;
+if(!S.payday)S.payday=DEFAULT_PAYDAY;
 
 function persist(){try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){toast('Your phone is out of space, so this was not saved.')}}
 
@@ -537,9 +539,16 @@ function txItem(t){
     <span class="a num ${t.type==='ingreso'?'in':''}">${t.type==='ingreso'?'+':''}${L(t.amt)}<small>${fmtDay(t.date)}</small></span>
   </button>`;
 }
+function paydaySelect(id){
+  const opts=[['last','Once a month, on the last day'],['semi','Every 15 days (15th and 30th)'],...Array.from({length:28},(_,i)=>[String(i+1),`Once a month, on the ${i+1}${[,'st','nd','rd'][(i+1)%10>3||((i+1)>10&&(i+1)<14)?0:(i+1)%10]||'th'}`])];
+  return `<select id="${id}">${opts.map(([v,n])=>`<option value="${v}" ${String(S.payday)===v?'selected':''}>${n}</option>`).join('')}</select>`;
+}
 function nextPayday(){
   const n=new Date();n.setHours(0,0,0,0);
-  const cands=[];for(let k=0;k<2;k++){const y=n.getFullYear(),m=n.getMonth()+k;const f=new Date(y,m,1);cands.push(new Date(y,m,15),new Date(y,m,Math.min(30,daysIn(f.getFullYear(),f.getMonth()))))}
+  const cands=[];
+  for(let k=0;k<2;k++){const f=new Date(n.getFullYear(),n.getMonth()+k,1),y=f.getFullYear(),m=f.getMonth(),last=daysIn(y,m);
+    if(S.payday==='semi')cands.push(new Date(y,m,15),new Date(y,m,Math.min(30,last)));
+    else cands.push(new Date(y,m,S.payday==='last'?last:Math.min(+S.payday||last,last)))}
   const d=cands.find(c=>c>=n);return Math.round((d-n)/864e5);
 }
 function nextBonus(){
@@ -595,7 +604,7 @@ function vInicio(){
   <section class="card cta"><h2>Get a budget made for you</h2><p class="sub">Tell me what you get and what you usually spend. I'll suggest how much to spend on food, rent, fun and savings.</p>
     <button class="btn primary wide" data-act="helper">Make my budget</button></section>`}
   <div class="chips">
-    <div class="chip"><b class="num">${pd===0?'Today':pd+(pd===1?' day':' days')}</b><span>${pd===0?'is payday':'until next payday'}</span></div>
+    <div class="chip"><b class="num">${pd===0?'Today':pd+(pd===1?' day':' days')}</b><span>${pd===0?'is payday!':'until payday'}</span></div>
     <div class="chip"><b class="num">${bn.days} days</b><span>until your ${bn.name}</span></div>
   </div>
   <section class="card">
@@ -742,6 +751,7 @@ function vOnboarding(){
     <h1>How much money do you get each month?</h1>
     <p class="lead">Your pay after deductions. If you're paid every 15 days, add both paychecks together. Include any remittances.</p>
     <div class="field"><label for="ob-inc">Monthly money in (lempiras)</label><input id="ob-inc" class="amount-in num" inputmode="decimal" placeholder="L 0" value="${ui.obIncome||S.income||DEFAULT_INCOME}"></div>
+    <div class="field"><label for="ob-pay">When do you get paid?</label>${paydaySelect('ob-pay')}</div>
     <p class="hint" id="ob-err" hidden style="color:var(--danger)">Type how much you get each month, like 25000.</p>
     <button class="btn primary wide xl" type="submit">Next</button>
     <button class="link center" type="button" data-act="ob-back">Back</button></form>`;
@@ -765,7 +775,7 @@ function mountOnboarding(){
   if(ui.ob===3)wireUsual(f,()=>ui.obIncome);
   f.addEventListener('submit',e=>{e.preventDefault();
     if(ui.ob===1){S.name=f.querySelector('#ob-name').value.trim();persist();ui.ob=2;render();return}
-    if(ui.ob===2){const v=parseAmt(f.querySelector('#ob-inc').value);if(!(v>0)){f.querySelector('#ob-err').hidden=false;return}ui.obIncome=v;ui.ob=3;render();return}
+    if(ui.ob===2){const v=parseAmt(f.querySelector('#ob-inc').value);if(!(v>0)){f.querySelector('#ob-err').hidden=false;return}ui.obIncome=v;S.payday=f.querySelector('#ob-pay').value;persist();ui.ob=3;render();return}
     if(ui.ob===3){ui.obUsual=readUsual(f);ui.ob=4;render();window.scrollTo(0,0);return}
     applyPlan(recommend(ui.obIncome,S.txns,ui.obUsual),ui.obIncome,ui.obUsual);S.onboarded=true;persist();ui.view='inicio';render();toast('All set! Tap "I spent money" whenever you buy something.',3500);
   });
@@ -981,6 +991,7 @@ function settingsSheet(){
     <div class="field"><label for="s-name">Your name</label><input id="s-name" maxlength="30" value="${esc(S.name)}" placeholder="For the greeting"></div>
     <div class="grid2"><div class="field"><label for="s-inc">Money in per month (L)</label><input id="s-inc" class="num" inputmode="decimal" value="${S.income||''}"></div>
     <div class="field"><label for="s-rate">Lempiras per dollar</label><input id="s-rate" class="num" inputmode="decimal" value="${S.rate}"></div></div>
+    <div class="field"><label for="s-pay">When do you get paid?</label>${paydaySelect('s-pay')}</div>
     <button class="btn primary wide xl" type="submit">Save</button>
     <h3 class="sh">Keep your data safe</h3>
     <p class="hint">Everything is saved on this phone only. Tap <b>Save a backup</b> once a month and keep the file in iCloud Drive or send it to yourself.</p>
@@ -998,6 +1009,7 @@ function settingsSheet(){
     form.addEventListener('submit',e=>{e.preventDefault();
       S.name=form.querySelector('#s-name').value.trim();
       const i=parseAmt(form.querySelector('#s-inc').value);if(i>0){S.income=i;if(S.catBudgets)S.saveTarget=Math.max(0,i-S.budget)}
+      S.payday=form.querySelector('#s-pay').value;
       const r=parseFloat(form.querySelector('#s-rate').value.replace(/[^\d.]/g,''));if(r>0)S.rate=r;
       persist();closeSheet();render();toast('Settings saved')});
   },false);
