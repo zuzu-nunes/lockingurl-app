@@ -365,6 +365,7 @@ const badge=(meta)=>`<span class="badge" style="background:color-mix(in srgb,var
 
 /* ---------- budget advice ---------- */
 // Share of spendable income per category when there is no history yet.
+const DEFAULT_NAME='Isa'; // the app is just for her for now
 const DEFAULT_PAYDAY='last'; // she's paid once a month, on the last day
 const DEFAULT_INCOME=25000; // her monthly pay, prefilled so setup is one tap
 const SHARE={vivienda:.30,comida:.25,transporte:.12,servicios:.10,salud:.05,compras:.07,ocio:.06,otros:.05};
@@ -513,7 +514,7 @@ function makeSample(){
   const rec=recommend(st.income,txns);st.catBudgets={...rec.cats};st.budget=rec.total;st.saveTarget=rec.save;
   return st;
 }
-function blankState(prev){return {v:2,sample:false,onboarded:false,name:prev?.name||'',budget:0,rate:prev?.rate||26.40,income:0,catBudgets:null,saveTarget:0,
+function blankState(prev){return {v:2,sample:false,onboarded:false,name:prev?.name||DEFAULT_NAME,budget:0,rate:prev?.rate||26.40,income:0,catBudgets:null,saveTarget:0,
   accounts:[{id:uid(),name:'Cash',kind:'efectivo',bal:0}],goals:[],txns:[]}}
 
 /* ---------- state + persistence ---------- */
@@ -528,6 +529,7 @@ if(!S.onboarded&&S.obDraft){ui.ob=S.obDraft.ob||1;ui.obIncome=S.obDraft.income||
 if(S.onboarded===undefined)S.onboarded=true;   // data saved by the first version
 if(S.income===undefined)S.income=0;
 if(!S.payday)S.payday=DEFAULT_PAYDAY;
+if(!S.name)S.name=DEFAULT_NAME;
 const SKINS=[['blush','Blush','#C26F88'],['sand','Sand','#A57A5E'],['lilac','Lilac','#8A78C4']];
 function applySkin(){const k=S.skin&&S.skin!=='blush'?S.skin:'';if(k)document.documentElement.dataset.skin=k;else delete document.documentElement.dataset.skin}
 applySkin();
@@ -784,7 +786,7 @@ function vInstall(){
   const step=(n,html)=>`<li><span class="inum">${n}</span><span>${html}</span></li>`;
   return `<div class="ob">
     <div class="ob-mark">${icon('phone')}</div>
-    <h1>First, add LempiraFlow to your Home Screen</h1>
+    <h1>Hi ${esc(S.name||DEFAULT_NAME)}! First, add LempiraFlow to your Home Screen</h1>
     <p class="lead">That way it opens like a normal app and remembers everything. You'll only set it up once.</p>
     ${IN_SAFARI?'':`<section class="card inote"><b>You're inside another app, like WhatsApp.</b>
       <span>Tap the <b>Safari</b> compass or the <b>⋯</b> button and choose <b>Open in Safari</b>. Or copy the link and paste it in Safari.</span>
@@ -802,7 +804,7 @@ function vOnboarding(){
   const dots=`<div class="ob-dots" aria-label="Step ${ui.ob} of 4">${[1,2,3,4].map(i=>`<i class="${i<=ui.ob?'on':''}"></i>`).join('')}</div>`;
   if(ui.ob===1)return `<form class="ob" id="ob">${dots}
     <div class="ob-mark">${icon('wallet')}</div>
-    <h1>Hi! Let's set up your money.</h1>
+    <h1>Hi ${esc(S.name||DEFAULT_NAME)}! Let's set up your money.</h1>
     <p class="lead">It takes two minutes. Everything stays on your phone.</p>
     <div class="field"><label for="ob-name">What's your name?</label><input id="ob-name" maxlength="30" autocomplete="given-name" value="${esc(S.name)}" placeholder="Your name"></div>
     <button class="btn primary wide xl" type="submit">Next</button>
