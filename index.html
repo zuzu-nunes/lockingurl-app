@@ -239,6 +239,8 @@ button{cursor:pointer}
 .ob-dots i.on{background:var(--accent)}
 .ob-mark{width:64px;height:64px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
 .ob-mark .ic{width:32px;height:32px}
+.cover{width:100%;aspect-ratio:736/300;max-height:190px;border-radius:22px;background:#E9F1FB url(icons/cover.jpg) center/cover no-repeat;border:1px solid var(--line)}
+.ob .cover{aspect-ratio:736/340}
 .badge .emo{font-size:20px;line-height:1}
 .emogrid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
 .emo-b{border:1px solid var(--line);background:var(--card2);border-radius:12px;font-size:22px;line-height:1;padding:8px 0}
@@ -649,6 +651,7 @@ function vInicio(){
   }
   const tip=homeTip(y,m);
   return `
+  <div class="cover" role="img" aria-label="Hot girls work hard"></div>
   <div class="title-row greet"><div><h1>${hi}${S.name?', '+esc(S.name):''} ✨</h1><p>${today}</p></div>
     <button class="round plain" data-act="settings" aria-label="Settings">${icon('gear')}</button></div>
   ${sampleBanner()}
@@ -806,7 +809,7 @@ const needInstall=()=>IS_IOS&&!INSTALLED&&!ui.skipInstall;
 function vInstall(){
   const step=(n,html)=>`<li><span class="inum">${n}</span><span>${html}</span></li>`;
   return `<div class="ob">
-    <div class="ob-mark">${icon('phone')}</div>
+    <div class="cover" role="img" aria-label="Hot girls work hard"></div>
     <h1>Hi ${esc(S.name||DEFAULT_NAME)}! ✨ First, add lockinGURL to your Home Screen</h1>
     <p class="lead">That way it opens like a normal app and remembers everything. You'll only set it up once.</p>
     ${IN_SAFARI?'':`<section class="card inote"><b>You're inside another app, like WhatsApp.</b>
@@ -824,7 +827,7 @@ function saveDraft(){S.obDraft={ob:ui.ob,income:ui.obIncome,usual:ui.obUsual};pe
 function vOnboarding(){
   const dots=`<div class="ob-dots" aria-label="Step ${ui.ob} of 4">${[1,2,3,4].map(i=>`<i class="${i<=ui.ob?'on':''}"></i>`).join('')}</div>`;
   if(ui.ob===1)return `<form class="ob" id="ob">${dots}
-    <div class="ob-mark">${icon('wallet')}</div>
+    <div class="cover" role="img" aria-label="Hot girls work hard"></div>
     <h1>Hi ${esc(S.name||DEFAULT_NAME)}! Let's set up your money ✨</h1>
     <p class="lead">It takes two minutes. Everything stays on your phone.</p>
     <div class="field"><label for="ob-name">What's your name?</label><input id="ob-name" maxlength="30" autocomplete="given-name" value="${esc(S.name)}" placeholder="Your name"></div>
