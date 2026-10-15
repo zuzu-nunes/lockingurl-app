@@ -289,6 +289,10 @@ button{cursor:pointer}
 .nav button[aria-current="page"]::after{content:"";width:4px;height:4px;border-radius:50%;background:currentColor}
 .sample{background:var(--card2);border:1px solid var(--line)}
 .bigbtn.in .bb-ic{background:color-mix(in srgb,var(--good) 14%,transparent);color:var(--good)}
+.tr-btns{display:flex;gap:8px;align-items:center}
+.curpill{border:1px solid var(--line);background:none;border-radius:99px;height:40px;padding:0 4px;display:flex;align-items:center;gap:2px;font-weight:700;font-size:14px}
+.curpill span{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:var(--muted)}
+.curpill span.on{background:var(--accent-soft);color:var(--accent)}
 .skins{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .skin{border:1px solid var(--line);background:var(--card);border-radius:14px;padding:10px 6px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:13.5px;font-weight:600}
 .skin i{width:26px;height:26px;border-radius:50%;display:block}
@@ -337,9 +341,20 @@ const icon=(n,cls='')=>`<svg viewBox="0 0 24 24" class="ic ${cls}" aria-hidden="
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const nf2=new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const nf0=new Intl.NumberFormat('en-US',{maximumFractionDigits:0});
-const L=(n,d=2)=>(n<0?'−':'')+'L '+(d?nf2:nf0).format(Math.abs(n));
-const USD=n=>'$ '+nf0.format(Math.round(n));
+// Amounts are always stored in lempiras. S.cur picks what she sees and types: 'HNL' or 'USD'.
 const r2=n=>Math.round(n*100)/100;
+const inUSD=()=>S?.cur==='USD';
+const SYM=()=>inUSD()?'$':'L';
+const CUR_WORD=()=>inUSD()?'dollars':'lempiras';
+const cv=n=>inUSD()?n/(S.rate||1):n;      // lempiras -> shown currency
+const toL=v=>inUSD()?r2(v*(S.rate||1)):v; // typed amount -> lempiras
+const fmtIn=n=>n?String(r2(cv(n))):'';     // prefill an amount input
+const M=(v,d=2)=>(v<0?'\u2212':'')+SYM()+'\u00a0'+(d?nf2:nf0).format(Math.abs(v)); // v already in shown currency
+const L=(n,d=2)=>M(cv(n),d);
+const ALT=n=>inUSD()?'L\u00a0'+nf0.format(Math.round(n)):'$\u00a0'+nf0.format(Math.round(n/(S.rate||1)));
+const PH=()=>SYM()+' 0';
+// An untouched amount field gives back its exact lempira value (no rounding drift through dollars).
+const amtAttrs=n=>`value="${fmtIn(n)}" data-l="${n||''}"`;
 const MES=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MES3=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const pad=n=>String(n).padStart(2,'0');
@@ -454,16 +469,16 @@ function recommend(income,txns,usual){
       ?`Based on what you earn and what you spent in the last ${h.months===1?'month':h.months+' months'}.`
       :'Most of your money goes to needs like rent and food, a little goes to fun, and some gets saved every month. Tell me what you really spend and I can fit it better.');
   }
-  if(save<income*.05)notes.push('Your bills take almost everything you get right now, so there is little left to save. Even L 100 a week adds up.');
+  if(save<income*.05)notes.push('Your bills take almost everything you get right now, so there is little left to save. Even '+(inUSD()?'$ 5':'L 100')+' a week adds up.');
   return {cats,total,save,notes};
 }
 // "What do you usually spend?" form, shared by setup and the Budget tab.
 const HINTS={vivienda:'Rent or house payment',comida:'Supermarket, pulpería, eating out',transporte:'Bus, taxi, gas',servicios:'Electricity, water, internet, phone',salud:'Pharmacy, doctor',compras:'Clothes, beauty, things for the house',ocio:'Going out, movies, streaming',otros:'Gifts, church, anything else'};
 function usualFields(pre){
-  return `<div class="ulist">${activeCats().map(k=>[k,CATS[k]]).map(([k,c])=>`<label class="urow" for="u-${k}">${badge(c)}<span class="ut"><b>${esc(c.n)}</b><small>${HINTS[k]||''}</small></span><input id="u-${k}" data-u="${k}" class="num" inputmode="decimal" placeholder="L 0" value="${pre[k]||''}"></label>`).join('')}</div>
+  return `<div class="ulist">${activeCats().map(k=>[k,CATS[k]]).map(([k,c])=>`<label class="urow" for="u-${k}">${badge(c)}<span class="ut"><b>${esc(c.n)}</b><small>${HINTS[k]||''}</small></span><input id="u-${k}" data-u="${k}" class="num" inputmode="decimal" placeholder="${PH()}" ${amtAttrs(pre[k])}></label>`).join('')}</div>
     <p class="utotal num" id="u-total"></p>`;
 }
-function readUsual(form){const u={};form.querySelectorAll('[data-u]').forEach(i=>{const v=parseAmt(i.value);if(v>0)u[i.dataset.u]=v});return u}
+function readUsual(form){const u={};form.querySelectorAll('[data-u]').forEach(i=>{const v=readAmt(i);if(v>0)u[i.dataset.u]=v});return u}
 function wireUsual(form,getIncome){
   const out=form.querySelector('#u-total');
   const upd=()=>{const t=Object.values(readUsual(form)).reduce((a,b)=>a+b,0),inc=getIncome();
@@ -535,7 +550,7 @@ function makeSample(){
   const rec=recommend(st.income,txns);st.catBudgets={...rec.cats};st.budget=rec.total;st.saveTarget=rec.save;
   return st;
 }
-function blankState(prev){return {v:2,sample:false,onboarded:false,name:prev?.name||DEFAULT_NAME,budget:0,rate:prev?.rate||26.40,income:0,catBudgets:null,saveTarget:0,
+function blankState(prev){return {v:2,sample:false,onboarded:false,name:prev?.name||DEFAULT_NAME,budget:0,rate:prev?.rate||26.40,cur:prev?.cur||'HNL',income:0,catBudgets:null,saveTarget:0,
   accounts:[{id:uid(),name:'Cash',kind:'efectivo',bal:0}],goals:[],txns:[]}}
 
 /* ---------- state + persistence ---------- */
@@ -547,10 +562,16 @@ try{const v=localStorage.getItem('lempiraflow:view');if(VIEWS.includes(v))ui.vie
 try{const raw=localStorage.getItem(LS);if(raw)S=JSON.parse(raw)}catch(e){}
 if(!S||!Array.isArray(S.txns))S=blankState();
 if(!S.onboarded&&S.obDraft){ui.ob=S.obDraft.ob||1;ui.obIncome=S.obDraft.income||0;ui.obUsual=S.obDraft.usual||null}
-if(S.onboarded===undefined)S.onboarded=true;   // data saved by the first version
-if(S.income===undefined)S.income=0;
-if(!S.payday)S.payday=DEFAULT_PAYDAY;
-if(!S.name)S.name=DEFAULT_NAME;
+function normalize(){
+  if(S.onboarded===undefined)S.onboarded=true;   // data saved by the first version
+  if(S.income===undefined)S.income=0;
+  if(!S.payday)S.payday=DEFAULT_PAYDAY;
+  if(!S.name)S.name=DEFAULT_NAME;
+  if(!(S.rate>0))S.rate=26.40;
+  if(S.cur!=='USD')S.cur='HNL';
+  if(!Array.isArray(S.goals))S.goals=[];
+}
+normalize();
 buildCats();
 const SKINS=[['blush','Blush','#C26F88'],['sand','Sand','#A57A5E'],['lilac','Lilac','#8A78C4']];
 function applySkin(){const k=S.skin&&S.skin!=='blush'?S.skin:'';if(k)document.documentElement.dataset.skin=k;else delete document.documentElement.dataset.skin}
@@ -626,6 +647,14 @@ function homeTip(y,m){
   if(worst.st==='over')return {cls:'bad',text:`${n}: you went ${L(worst.sp-worst.lim,0)} over. Try to skip extras here until next month.`};
   return {cls:'warn',text:`${n} is at ${Math.round(worst.sp/worst.lim*100)}% and the month is ${Math.round(prog*100)}% done. Go easy on ${lower(n)} for a few days.`};
 }
+const curSeg=()=>`<div class="seg" role="group" aria-label="Currency"><button type="button" data-cur="HNL" aria-pressed="${!inUSD()}">Lempiras (L)</button><button type="button" data-cur="USD" aria-pressed="${inUSD()}">Dollars ($)</button></div>`;
+const curPill=()=>`<button class="curpill" data-act="cur" aria-label="Showing ${CUR_WORD()}. Tap to show ${inUSD()?'lempiras':'dollars'}"><span class="${inUSD()?'':'on'}">L</span><span class="${inUSD()?'on':''}">$</span></button>`;
+function setCur(c,announce=true){
+  const f=document.getElementById('ob');
+  if(f&&ui.ob===2){const v=readAmt(f.querySelector('#ob-inc'));if(v>0)ui.obIncome=v}
+  S.cur=c==='USD'?'USD':'HNL';if(!S.onboarded)saveDraft();persist();render();
+  if(announce)toast(inUSD()?`Showing dollars (L ${S.rate} = $1)`:'Showing lempiras');
+}
 function vInicio(){
   const n=new Date(),y=n.getFullYear(),m=n.getMonth();
   const tx=monthTx(y,m),inc=sum(tx,'ingreso'),out=sum(tx,'gasto');
@@ -652,8 +681,8 @@ function vInicio(){
   const tip=homeTip(y,m);
   return `
   <div class="cover" role="img" aria-label="Hot girls work hard"></div>
-  <div class="title-row greet"><div><h1>${hi}${S.name?', '+esc(S.name):''} ✨</h1><p>${today}</p></div>
-    <button class="round plain" data-act="settings" aria-label="Settings">${icon('gear')}</button></div>
+  <div class="title-row greet"><div><h1>${hi}${S.name?',':''} <span style="white-space:nowrap">${S.name?esc(S.name)+' ':''}✨</span></h1><p>${today}</p></div>
+    <div class="tr-btns">${curPill()}<button class="round plain" data-act="settings" aria-label="Settings">${icon('gear')}</button></div></div>
   ${sampleBanner()}
   ${hero}
   <div class="bigbtns">
@@ -736,11 +765,11 @@ function vPatrimonio(){
   const A=assets.reduce((s,a)=>s+a.bal,0),D=debts.reduce((s,a)=>s+a.bal,0),net=A-D;
   const acc=a=>`<button class="item" data-acct="${a.id}">${badge({c:isDebt(a.kind)?'--danger':'--c1',i:KINDS[a.kind]?.i||'wallet'})}
     <span style="min-width:0"><span class="t">${esc(a.name)}</span><br><span class="s">${KINDS[a.kind]?.n||''}</span></span>
-    <span class="a num" ${isDebt(a.kind)?'style="color:var(--danger)"':''}>${isDebt(a.kind)?'−':''}${L(Math.abs(a.bal))}<small>${USD(a.bal/S.rate)}</small></span></button>`;
-  return `<div class="title-row"><h1>My Money</h1><button class="round plain" data-act="settings" aria-label="Settings">${icon('gear')}</button></div>
+    <span class="a num" ${isDebt(a.kind)?'style="color:var(--danger)"':''}>${isDebt(a.kind)?'−':''}${L(Math.abs(a.bal))}<small>${ALT(a.bal)}</small></span></button>`;
+  return `<div class="title-row"><h1>My Money</h1><div class="tr-btns">${curPill()}<button class="round plain" data-act="settings" aria-label="Settings">${icon('gear')}</button></div></div>
   ${sampleBanner()}
   <section class="hero">
-    <div><div class="label">Everything you have, minus what you owe</div><div class="big num">${L(net,0)}</div><div class="usd num">≈ ${USD(net/S.rate)}</div></div>
+    <div><div class="label">Everything you have, minus what you owe</div><div class="big num">${L(net,0)}</div><div class="usd num">≈ ${ALT(net)}</div></div>
     <div class="split num"><div><span>You have</span><b>${L(A,0)}</b></div><div><span>You owe</span><b>${L(D,0)}</b></div></div>
   </section>
   <section class="card"><div class="row"><h2>Cash & accounts</h2><button class="link" data-act="newacct">${icon('plus')}Add</button></div>
@@ -755,11 +784,11 @@ function vMetas(){
   const goal=g=>{const pct=Math.min(100,g.saved/g.target*100||0);
     const due=g.due?new Date(g.due+'T12:00'):null;
     const months=due?Math.max(1,(due.getFullYear()-now.getFullYear())*12+due.getMonth()-now.getMonth()):null;
-    const need=Math.max(0,g.target-g.saved);
+    const need=Math.max(0,g.target-g.saved),late=due&&due<now;
     return `<section class="card goal">
       <div class="top"><div><h3>${esc(g.name)}</h3><p class="sub num">${L(g.saved,0)} of ${L(g.target,0)}${due?` · by ${MES3[due.getMonth()]} ${due.getDate()}, ${due.getFullYear()}`:''}</p></div><span class="pct num">${Math.round(pct)}%</span></div>
       <div class="bar thin"><i style="width:${pct}%"></i></div>
-      ${need>0?`<p class="hint num">${months?`Save <b>${L(need/months,0)}</b> a month to reach it on time.`:`${L(need,0)} to go.`}</p>`:`<span class="pill">Goal reached! 🪩</span>`}
+      ${need>0?`<p class="hint num">${late?`The date passed. ${L(need,0)} to go.`:months?`Save <b>${L(need/months,0)}</b> a month to reach it on time.`:`${L(need,0)} to go.`}</p>`:`<span class="pill">Goal reached! 🪩</span>`}
       <div class="btns"><button class="btn primary" data-abono="${g.id}">Add money</button><button class="btn" data-goal="${g.id}">Edit</button></div>
     </section>`};
   return `<div class="title-row"><h1>Goals</h1><button class="round" data-act="newgoal" aria-label="New goal">${icon('plus')}</button></div>
@@ -776,7 +805,7 @@ function insightsBlock(){
   const max=niceMax(Math.max(...months.map(x=>Math.max(x.inc,x.out))));
   const W=320,H=190,l=34,b=24,t=8,cw=(W-l-6)/6,bw=Math.min(16,cw/2-5);
   const y=v=>t+(H-t-b)*(1-v/max);
-  let g='';for(let i=0;i<=4;i++){const v=max*i/4;g+=`<line x1="${l}" x2="${W-4}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(--line)" stroke-width="1"/><text x="${l-6}" y="${y(v)+3.5}" text-anchor="end">${kfmt(v)}</text>`}
+  let g='';for(let i=0;i<=4;i++){const v=max*i/4;g+=`<line x1="${l}" x2="${W-4}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(--line)" stroke-width="1"/><text x="${l-6}" y="${y(v)+3.5}" text-anchor="end">${kfmt(cv(v))}</text>`}
   const bars=months.map((x,i)=>{const cx=l+cw*i+cw/2;const sel=i===5;
     return `<rect x="${cx-bw-1.5}" y="${y(x.inc)}" width="${bw}" height="${Math.max(0,H-b-y(x.inc))}" rx="4" style="fill:var(--good);opacity:${sel?1:.55}"><title>${MES[x.m]} money in: ${L(x.inc)}</title></rect>
       <rect x="${cx+1.5}" y="${y(x.out)}" width="${bw}" height="${Math.max(0,H-b-y(x.out))}" rx="4" style="fill:var(--c2);opacity:${sel?1:.55}"><title>${MES[x.m]} money out: ${L(x.out)}</title></rect>
@@ -839,9 +868,10 @@ function vOnboarding(){
   if(ui.ob===2)return `<form class="ob" id="ob">${dots}
     <h1>How much money do you get each month?</h1>
     <p class="lead">Your pay after deductions. If you're paid every 15 days, add both paychecks together. Include any remittances.</p>
-    <div class="field"><label for="ob-inc">Monthly money in (lempiras)</label><input id="ob-inc" class="amount-in num" inputmode="decimal" placeholder="L 0" value="${ui.obIncome||S.income||DEFAULT_INCOME}"></div>
+    <div class="field"><span class="flabel">I count my money in</span>${curSeg()}</div>
+    <div class="field"><label for="ob-inc">Monthly money in (${CUR_WORD()})</label><input id="ob-inc" class="amount-in num" inputmode="decimal" placeholder="${PH()}" ${amtAttrs(ui.obIncome||S.income||DEFAULT_INCOME)}></div>
     <div class="field"><label for="ob-pay">When do you get paid?</label>${paydaySelect('ob-pay')}</div>
-    <p class="hint" id="ob-err" hidden style="color:var(--danger)">Type how much you get each month, like 25000.</p>
+    <p class="hint" id="ob-err" hidden style="color:var(--danger)">Type how much you get each month, like ${inUSD()?'1000':'25000'}.</p>
     <button class="btn primary wide xl" type="submit">Next</button>
     <button class="link center" type="button" data-act="ob-back">Back</button></form>`;
   if(ui.ob===3)return `<form class="ob" id="ob">${dots}
@@ -865,13 +895,13 @@ function mountOnboarding(){
   const rf=f.querySelector('#ob-restore');if(rf)rf.addEventListener('change',e=>importBackup(e.target.files[0],f.querySelector('#ob-rmsg')));
   let t;f.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(()=>{
     if(ui.ob===1)S.name=f.querySelector('#ob-name').value.trim();
-    if(ui.ob===2){const v=parseAmt(f.querySelector('#ob-inc').value);if(v>0)ui.obIncome=v;S.payday=f.querySelector('#ob-pay').value}
+    if(ui.ob===2){const v=readAmt(f.querySelector('#ob-inc'));if(v>0)ui.obIncome=v;S.payday=f.querySelector('#ob-pay').value}
     if(ui.ob===3)ui.obUsual=readUsual(f);
     saveDraft()},400)});
   f.addEventListener('change',()=>f.dispatchEvent(new Event('input')));
   f.addEventListener('submit',e=>{e.preventDefault();
     if(ui.ob===1){S.name=f.querySelector('#ob-name').value.trim();persist();ui.ob=2;render();return}
-    if(ui.ob===2){const v=parseAmt(f.querySelector('#ob-inc').value);if(!(v>0)){f.querySelector('#ob-err').hidden=false;return}ui.obIncome=v;S.payday=f.querySelector('#ob-pay').value;persist();ui.ob=3;render();return}
+    if(ui.ob===2){const v=readAmt(f.querySelector('#ob-inc'));if(!(v>0)){f.querySelector('#ob-err').hidden=false;return}ui.obIncome=v;S.payday=f.querySelector('#ob-pay').value;persist();ui.ob=3;render();return}
     if(ui.ob===3){ui.obUsual=readUsual(f);ui.ob=4;render();window.scrollTo(0,0);return}
     applyPlan(recommend(ui.obIncome,S.txns,ui.obUsual),ui.obIncome,ui.obUsual);S.onboarded=true;delete S.obDraft;persist();ui.view='inicio';render();toast('All set! 🪩 Tap "I spent money" whenever you buy something.',3500);
   });
@@ -895,6 +925,7 @@ function render(){
 function go(v){ui.view=v;try{localStorage.setItem('lempiraflow:view',v)}catch(e){}render();window.scrollTo(0,0)}
 function toast(msg,ms=2200){const t=document.getElementById('toast');t.textContent=msg;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,ms)}
 const parseAmt=v=>r2(parseFloat(String(v).replace(/[^\d.]/g,''))||0);
+const readAmt=i=>i.dataset.l&&i.value===i.defaultValue?+i.dataset.l:toL(parseAmt(i.value));
 
 /* ---------- sheets ---------- */
 function openSheet(html,onMount,focus=true){
@@ -927,13 +958,13 @@ function addSheet(type,cat){
   }
   const meta=set[cat],today=todayISO(),yd=new Date();yd.setDate(yd.getDate()-1);
   const yest=iso(yd.getFullYear(),yd.getMonth(),yd.getDate());
-  const quick=type==='ingreso'?[1000,2500,5000,10000]:[50,100,200,500,1000];
+  const quick=inUSD()?(type==='ingreso'?[50,100,250,500]:[2,5,10,20,50]):(type==='ingreso'?[1000,2500,5000,10000]:[50,100,200,500,1000]);
   const lim=type==='gasto'?catLeft(cat):null;
   const defAcct=S.lastAcct&&S.accounts.some(a=>a.id===S.lastAcct)?S.lastAcct:'';
   openSheet(`<div class="row"><button type="button" class="link" id="x-back">${icon('chevL')}Back</button>${close}</div>
     <div class="picked">${badge(meta)}<div><h2>${esc(meta.n)}</h2>${lim&&lim.limit?`<p class="sub num">${lim.spent<=lim.limit?`${L(lim.limit-lim.spent,0)} left this month`:`Already ${L(lim.spent-lim.limit,0)} over this month`}</p>`:''}</div></div>
-    <div class="field"><label for="x-amt">How much? (lempiras)</label><input id="x-amt" class="amount-in num" inputmode="decimal" placeholder="L 0"></div>
-    <div class="qs">${quick.map(v=>`<button type="button" class="q" data-q="${v}">${L(v,0)}</button>`).join('')}</div>
+    <div class="field"><label for="x-amt">How much? (${CUR_WORD()})</label><input id="x-amt" class="amount-in num" inputmode="decimal" placeholder="${PH()}"></div>
+    <div class="qs">${quick.map(v=>`<button type="button" class="q" data-q="${v}">${M(v,0)}</button>`).join('')}</div>
     <div class="field"><label for="x-note">What was it? (optional)</label><input id="x-note" maxlength="60" placeholder="${type==='ingreso'?'e.g. Paycheck':'e.g. Baleadas, groceries, bus'}"></div>
     <div class="field"><span class="flabel">When?</span><div class="qs" id="x-when">
       <button type="button" class="q" data-d="${today}" aria-pressed="true">Today</button><button type="button" class="q" data-d="${yest}" aria-pressed="false">Yesterday</button><button type="button" class="q" data-d="other" aria-pressed="false">Another day</button></div>
@@ -945,7 +976,7 @@ function addSheet(type,cat){
     <button class="btn primary wide xl" type="submit" id="x-save">Save</button>`,
   form=>{
     const amt=form.querySelector('#x-amt'),save=form.querySelector('#x-save'),date=form.querySelector('#x-date');
-    const label=()=>{const v=parseAmt(amt.value);save.textContent=v>0?`Save ${L(v,v%1?2:0)}`:'Save'};
+    const label=()=>{const v=parseAmt(amt.value);save.textContent=v>0?`Save ${M(v,v%1?2:0)}`:'Save'};
     amt.addEventListener('input',label);
     form.querySelector('#x-back').addEventListener('click',()=>addSheet(type));
     form.querySelectorAll('[data-q]').forEach(b=>b.addEventListener('click',()=>{amt.value=b.dataset.q;label()}));
@@ -953,7 +984,7 @@ function addSheet(type,cat){
       form.querySelectorAll('[data-d]').forEach(x=>x.setAttribute('aria-pressed',x===b));
       if(b.dataset.d==='other'){date.hidden=false;date.focus()}else{date.hidden=true;date.value=b.dataset.d}}));
     form.addEventListener('submit',e=>{e.preventDefault();
-      const v=parseAmt(amt.value);if(!(v>0)){form.querySelector('#x-err').hidden=false;amt.focus();return}
+      const v=toL(parseAmt(amt.value));if(!(v>0)){form.querySelector('#x-err').hidden=false;amt.focus();return}
       const acct=form.querySelector('#x-acct').value;
       const rec={id:uid(),type,amt:v,cat,note:form.querySelector('#x-note').value.trim(),date:date.value||today,acct};
       S.txns.push(rec);applyToAcct(rec,1);S.lastAcct=acct;persist();closeSheet();render();
@@ -969,7 +1000,7 @@ function txSheet(id){
   const today=todayISO();
   openSheet(`<div class="row"><h2>Fix this entry</h2>${close}</div>
     <div class="seg" role="group" aria-label="Type"><button type="button" data-type="gasto">Money out</button><button type="button" data-type="ingreso">Money in</button></div>
-    <div class="field"><label for="f-amt">Amount (lempiras)</label><input id="f-amt" class="amount-in num" inputmode="decimal" value="${t.amt}"></div>
+    <div class="field"><label for="f-amt">Amount (${CUR_WORD()})</label><input id="f-amt" class="amount-in num" inputmode="decimal" ${amtAttrs(t.amt)}></div>
     <div class="field"><label for="f-note">What was it?</label><input id="f-note" maxlength="60" value="${esc(t.note||'')}"></div>
     <div class="grid2">
       <div class="field"><label for="f-cat">Category</label><select id="f-cat"></select></div>
@@ -985,7 +1016,7 @@ function txSheet(id){
     segB.forEach(b=>b.addEventListener('click',()=>{type=b.dataset.type;syncSeg()}));syncSeg();
     deleteBtn(()=>{applyToAcct(t,-1);S.txns=S.txns.filter(x=>x.id!==t.id);persist();closeSheet();render();toast('Deleted')})(form.querySelector('#f-del'));
     form.addEventListener('submit',e=>{e.preventDefault();
-      const amt=parseAmt(form.querySelector('#f-amt').value);
+      const amt=readAmt(form.querySelector('#f-amt'));
       if(!(amt>0)){form.querySelector('#f-err').hidden=false;return}
       const date=form.querySelector('#f-date').value||today;
       applyToAcct(t,-1);Object.assign(t,{type,amt,cat:cat.value,note:form.querySelector('#f-note').value.trim(),date,acct:form.querySelector('#f-acct').value});applyToAcct(t,1);
@@ -998,22 +1029,22 @@ function helperSheet(){
   openSheet(`<div class="row"><h2>Fit my budget</h2>${close}</div>
     <div id="h-ask" class="stack">
       <p class="sub">Tell me what you get and what you usually spend. I'll make a budget that fits your real life.</p>
-      <div class="field"><label for="h-inc">Money in per month (lempiras)</label><input id="h-inc" class="amount-in num" inputmode="decimal" placeholder="L 0" value="${est}"></div>
+      <div class="field"><label for="h-inc">Money in per month (${CUR_WORD()})</label><input id="h-inc" class="amount-in num" inputmode="decimal" placeholder="${PH()}" ${amtAttrs(est)}></div>
       <h3 class="sh">What you usually spend each month</h3>
       ${usualFields(usualPrefill())}
     </div>
-    <p class="hint" id="h-err" hidden style="color:var(--danger)">Type how much you get each month, like 25000.</p>
+    <p class="hint" id="h-err" hidden style="color:var(--danger)">Type how much you get each month, like ${inUSD()?'1000':'25000'}.</p>
     <div id="h-out"></div>
     <button class="btn primary wide xl" type="submit" id="h-go">Make my budget</button>
     <button type="button" class="link center" id="h-edit" hidden>Change my answers</button>`,
   form=>{
     const inc=form.querySelector('#h-inc'),ask=form.querySelector('#h-ask'),out=form.querySelector('#h-out'),btn=form.querySelector('#h-go'),edit=form.querySelector('#h-edit');
     let rec=null,income=0,usual={};
-    wireUsual(form,()=>parseAmt(inc.value));
+    wireUsual(form,()=>readAmt(inc));
     edit.addEventListener('click',()=>{rec=null;out.innerHTML='';ask.hidden=false;edit.hidden=true;btn.textContent='Make my budget'});
     form.addEventListener('submit',e=>{e.preventDefault();
       if(rec){applyPlan(rec,income,usual);persist();closeSheet();go_('presupuesto');toast('Your new budget is ready ✨');return}
-      income=parseAmt(inc.value);if(!(income>0)){form.querySelector('#h-err').hidden=false;return}
+      income=readAmt(inc);if(!(income>0)){form.querySelector('#h-err').hidden=false;return}
       form.querySelector('#h-err').hidden=true;usual=readUsual(form);
       rec=recommend(income,S.txns,usual);
       out.innerHTML=`<section class="card flat">${recPlan(rec)}</section>`;ask.hidden=true;edit.hidden=false;btn.textContent='Use this budget';
@@ -1063,7 +1094,7 @@ function catEditSheet(k,back){
     <div class="field"><span class="flabel">What kind of spending is it?</span>
       <div class="seg" role="group" aria-label="Kind">${Object.entries(KIND_N).map(([v,n])=>`<button type="button" data-kind="${v}" aria-pressed="${v===kind}">${n}</button>`).join('')}</div>
       <p class="hint" id="ce-kh"></p></div>
-    <div class="field"><label for="ce-lim">Monthly limit in lempiras (optional)</label><input id="ce-lim" class="num" inputmode="decimal" placeholder="L 0" value="${k&&S.catBudgets?.[k]||''}"></div>
+    <div class="field"><label for="ce-lim">Monthly limit in ${CUR_WORD()} (optional)</label><input id="ce-lim" class="num" inputmode="decimal" placeholder="${PH()}" ${amtAttrs(k&&S.catBudgets?.[k]||0)}></div>
     <p class="hint" id="ce-err" hidden style="color:var(--danger)">Give it a name, like "Nails".</p>
     <button class="btn primary wide xl" type="submit">Save</button>
     ${isNew?'':'<button type="button" class="btn danger wide" id="ce-del">Remove this category</button>'}`,
@@ -1085,7 +1116,7 @@ function catEditSheet(k,back){
       if(!name){form.querySelector('#ce-err').hidden=false;form.querySelector('#ce-name').focus();return}
       const key=k||'u_'+uid();
       setCat(key,{n:name,e:emo,c:col,kind,hidden:false});
-      const lim=parseAmt(form.querySelector('#ce-lim').value);
+      const lim=readAmt(form.querySelector('#ce-lim'));
       if(lim>0){S.catBudgets={...(S.catBudgets||{}),[key]:lim};recalcBudget()}
       else if(S.catBudgets&&key in S.catBudgets){const b={...S.catBudgets};delete b[key];S.catBudgets=b;recalcBudget()}
       persist();render();toast(isNew?`${name} added ✨`:'Category saved');
@@ -1096,12 +1127,12 @@ function catEditSheet(k,back){
 function catSheet(k){
   const cur=S.catBudgets?.[k]||0,rec=S.income?recommend(S.income,S.txns).cats[k]:null;
   openSheet(`<div class="row"><h2>${CATS[k].n}</h2>${close}</div>
-    <div class="field"><label for="c-amt">Monthly limit (lempiras)</label><input id="c-amt" class="amount-in num" inputmode="decimal" value="${cur||''}" placeholder="L 0"></div>
+    <div class="field"><label for="c-amt">Monthly limit (${CUR_WORD()})</label><input id="c-amt" class="amount-in num" inputmode="decimal" ${amtAttrs(cur)} placeholder="${PH()}"></div>
     ${rec!=null?`<p class="hint num">Recommended for you: <b>${L(rec,0)}</b> <button type="button" class="link" id="c-rec">Use it</button></p>`:''}
     <button class="btn primary wide xl" type="submit">Save</button>`,
   form=>{
-    const a=form.querySelector('#c-amt');const r=form.querySelector('#c-rec');if(r)r.addEventListener('click',()=>{a.value=rec});
-    form.addEventListener('submit',e=>{e.preventDefault();const v=parseAmt(a.value);
+    const a=form.querySelector('#c-amt');const r=form.querySelector('#c-rec');if(r)r.addEventListener('click',()=>{a.value=a.defaultValue=fmtIn(rec);a.dataset.l=rec||''});
+    form.addEventListener('submit',e=>{e.preventDefault();const v=readAmt(a);
       S.catBudgets={...(S.catBudgets||{}),[k]:v};S.budget=Object.values(S.catBudgets).reduce((x,y)=>x+y,0);
       if(S.income)S.saveTarget=Math.max(0,S.income-S.budget);
       persist();closeSheet();render();toast('Limit saved')});
@@ -1113,15 +1144,15 @@ function acctSheet(id,kind){
   openSheet(`<div class="row"><h2>${a?'Update account':kind==='tarjeta'?'Add a debt':'Add an account'}</h2>${close}</div>
     <div class="field"><label for="a-name">Name</label><input id="a-name" maxlength="40" placeholder="${isDebt(k)?'e.g. Credit card':'e.g. Savings account'}" value="${esc(a?.name||'')}"></div>
     <div class="field"><label for="a-kind">Type</label><select id="a-kind">${Object.entries(KINDS).map(([kk,v])=>`<option value="${kk}" ${k===kk?'selected':''}>${v.n}</option>`).join('')}</select></div>
-    <div class="field"><label for="a-bal" id="a-bal-l">${isDebt(k)?'How much do you owe? (lempiras)':'How much is in it now? (lempiras)'}</label><input id="a-bal" class="amount-in num" inputmode="decimal" value="${a?a.bal:''}" placeholder="L 0"></div>
+    <div class="field"><label for="a-bal" id="a-bal-l">${isDebt(k)?'How much do you owe? ('+CUR_WORD()+')':'How much is in it now? ('+CUR_WORD()+')'}</label><input id="a-bal" class="amount-in num" inputmode="decimal" ${amtAttrs(a?a.bal:0)} placeholder="${PH()}"></div>
     <button class="btn primary wide xl" type="submit">Save</button>
     ${a?'<button type="button" class="btn danger wide" id="a-del">Delete account</button>':''}`,
   form=>{
     const del=form.querySelector('#a-del'),kindSel=form.querySelector('#a-kind');
-    kindSel.addEventListener('change',()=>{form.querySelector('#a-bal-l').textContent=isDebt(kindSel.value)?'How much do you owe? (lempiras)':'How much is in it now? (lempiras)'});
+    kindSel.addEventListener('change',()=>{form.querySelector('#a-bal-l').textContent=isDebt(kindSel.value)?'How much do you owe? ('+CUR_WORD()+')':'How much is in it now? ('+CUR_WORD()+')'});
     if(del)deleteBtn(()=>{S.accounts=S.accounts.filter(x=>x.id!==a.id);S.txns.forEach(t=>{if(t.acct===a.id)t.acct=''});persist();closeSheet();render();toast('Account deleted')})(del);
     form.addEventListener('submit',e=>{e.preventDefault();
-      const rec={name:form.querySelector('#a-name').value.trim()||KINDS[kindSel.value].n,kind:kindSel.value,bal:r2(parseFloat(form.querySelector('#a-bal').value.replace(/[^\d.-]/g,''))||0)};
+      const rec={name:form.querySelector('#a-name').value.trim()||KINDS[kindSel.value].n,kind:kindSel.value,bal:(i=>i.dataset.l&&i.value===i.defaultValue?+i.dataset.l:toL(r2(parseFloat(i.value.replace(/[^\d.-]/g,''))||0)))(form.querySelector('#a-bal'))};
       if(a)Object.assign(a,rec);else S.accounts.push({id:uid(),...rec});
       persist();closeSheet();render();toast('Saved')});
   });
@@ -1130,19 +1161,19 @@ function goalSheet(id){
   const g=id?S.goals.find(x=>x.id===id):null;
   openSheet(`<div class="row"><h2>${g?'Edit goal':'New goal'}</h2>${close}</div>
     <div class="field"><label for="g-name">What are you saving for?</label><input id="g-name" maxlength="50" placeholder="e.g. Emergency fund" value="${esc(g?.name||'')}"></div>
-    <div class="grid2"><div class="field"><label for="g-target">How much you need (L)</label><input id="g-target" class="num" inputmode="decimal" value="${g?g.target:''}" placeholder="20000"></div>
-    <div class="field"><label for="g-saved">Saved so far (L)</label><input id="g-saved" class="num" inputmode="decimal" value="${g?g.saved:''}" placeholder="0"></div></div>
+    <div class="grid2"><div class="field"><label for="g-target">How much you need (${SYM()})</label><input id="g-target" class="num" inputmode="decimal" ${amtAttrs(g?g.target:0)} placeholder="${inUSD()?'800':'20000'}"></div>
+    <div class="field"><label for="g-saved">Saved so far (${SYM()})</label><input id="g-saved" class="num" inputmode="decimal" ${amtAttrs(g?g.saved:0)} placeholder="0"></div></div>
     <div class="field"><label for="g-due">By when? (optional)</label><input id="g-due" type="date" value="${g?.due||''}"></div>
-    <p class="hint" id="g-err" hidden style="color:var(--danger)">Type how much you need in total, like 20000.</p>
+    <p class="hint" id="g-err" hidden style="color:var(--danger)">Type how much you need in total, like ${inUSD()?'800':'20000'}.</p>
     <button class="btn primary wide xl" type="submit">Save</button>
     ${g?'<button type="button" class="btn danger wide" id="g-del">Delete goal</button>':''}`,
   form=>{
     const del=form.querySelector('#g-del');
     if(del)deleteBtn(()=>{S.goals=S.goals.filter(x=>x.id!==g.id);persist();closeSheet();render();toast('Goal deleted')})(del);
     form.addEventListener('submit',e=>{e.preventDefault();
-      const target=parseAmt(form.querySelector('#g-target').value);
+      const target=readAmt(form.querySelector('#g-target'));
       if(!(target>0)){form.querySelector('#g-err').hidden=false;return}
-      const rec={name:form.querySelector('#g-name').value.trim()||'My goal',target,saved:parseAmt(form.querySelector('#g-saved').value),due:form.querySelector('#g-due').value};
+      const rec={name:form.querySelector('#g-name').value.trim()||'My goal',target,saved:readAmt(form.querySelector('#g-saved')),due:form.querySelector('#g-due').value};
       if(g)Object.assign(g,rec);else S.goals.push({id:uid(),...rec});
       persist();closeSheet();render();toast('Goal saved')});
   });
@@ -1150,21 +1181,22 @@ function goalSheet(id){
 function abonoSheet(id){
   const g=S.goals.find(x=>x.id===id);if(!g)return;
   openSheet(`<div class="row"><h2>Add money to “${esc(g.name)}”</h2>${close}</div>
-    <div class="field"><label for="b-amt">How much? (lempiras)</label><input id="b-amt" class="amount-in num" inputmode="decimal" placeholder="L 0"></div>
-    <div class="qs">${[500,1000,2000,5000].map(v=>`<button type="button" class="q" data-q="${v}">${L(v,0)}</button>`).join('')}</div>
+    <div class="field"><label for="b-amt">How much? (${CUR_WORD()})</label><input id="b-amt" class="amount-in num" inputmode="decimal" placeholder="${PH()}"></div>
+    <div class="qs">${(inUSD()?[20,50,100,200]:[500,1000,2000,5000]).map(v=>`<button type="button" class="q" data-q="${v}">${M(v,0)}</button>`).join('')}</div>
     <button class="btn primary wide xl" type="submit">Add money</button>`,
   form=>{
     form.querySelectorAll('[data-q]').forEach(b=>b.addEventListener('click',()=>{form.querySelector('#b-amt').value=b.dataset.q}));
-    form.addEventListener('submit',e=>{e.preventDefault();const v=parseAmt(form.querySelector('#b-amt').value);if(!(v>0))return;
+    form.addEventListener('submit',e=>{e.preventDefault();const v=toL(parseAmt(form.querySelector('#b-amt').value));if(!(v>0))return;
       g.saved=r2(g.saved+v);persist();closeSheet();render();toast(`Added ${L(v,0)}. Great job! 🕺`)});
   });
 }
 function settingsSheet(){
   openSheet(`<div class="row"><h2>Settings</h2>${close}</div>
     <div class="field"><label for="s-name">Your name</label><input id="s-name" maxlength="30" value="${esc(S.name)}" placeholder="For the greeting"></div>
-    <div class="grid2"><div class="field"><label for="s-inc">Money in per month (L)</label><input id="s-inc" class="num" inputmode="decimal" value="${S.income||''}"></div>
+    <div class="grid2"><div class="field"><label for="s-inc">Money in per month (<span id="s-sym">${SYM()}</span>)</label><input id="s-inc" class="num" inputmode="decimal" ${amtAttrs(S.income)}></div>
     <div class="field"><label for="s-rate">Lempiras per dollar</label><input id="s-rate" class="num" inputmode="decimal" value="${S.rate}"></div></div>
     <div class="field"><label for="s-pay">When do you get paid?</label>${paydaySelect('s-pay')}</div>
+    <div class="field"><span class="flabel">Show my money in</span>${curSeg()}</div>
     <div class="field"><span class="flabel">Colors</span><div class="skins" role="group" aria-label="Colors">${SKINS.map(([k,n,c])=>`<button type="button" class="skin" data-skin="${k}" aria-pressed="${(S.skin||'blush')===k}"><i style="background:${c}"></i>${n}</button>`).join('')}</div></div>
     <button class="btn primary wide xl" type="submit">Save</button>
     <button type="button" class="btn wide" id="s-cats">${icon('pencil')} My categories</button>
@@ -1178,14 +1210,18 @@ function settingsSheet(){
     <button type="button" class="btn danger wide" id="s-clear">Erase everything</button>`,
   form=>{
     form.querySelectorAll('[data-skin]').forEach(b=>b.addEventListener('click',()=>{S.skin=b.dataset.skin;applySkin();persist();form.querySelectorAll('[data-skin]').forEach(x=>x.setAttribute('aria-pressed',x===b))}));
+    form.querySelectorAll('[data-cur]').forEach(b=>b.addEventListener('click',()=>{
+      const inp=form.querySelector('#s-inc'),lv=readAmt(inp);setCur(b.dataset.cur,false);
+      inp.value=inp.defaultValue=fmtIn(lv);inp.dataset.l=lv||'';form.querySelector('#s-sym').textContent=SYM();
+      form.querySelectorAll('[data-cur]').forEach(x=>x.setAttribute('aria-pressed',x===b))}));
     form.querySelector('#s-cats').addEventListener('click',catsSheet);
     form.querySelector('#s-export').addEventListener('click',exportBackup);
     form.querySelector('#s-import').addEventListener('change',e=>importBackup(e.target.files[0],form.querySelector('#s-msg')));
     deleteBtn(()=>{S=blankState(S);ui.ob=1;ui.obIncome=0;persist();closeSheet();render()},'Tap again to erase everything')(form.querySelector('#s-clear'));
-    deleteBtn(()=>{const name=S.name;S=makeSample();S.name=name;persist();closeSheet();render();toast('Showing example money')},'Tap again: this replaces your data')(form.querySelector('#s-sample'));
+    deleteBtn(()=>{const name=S.name,cur=S.cur;S=makeSample();S.name=name;S.cur=cur;persist();closeSheet();render();toast('Showing example money')},'Tap again: this replaces your data')(form.querySelector('#s-sample'));
     form.addEventListener('submit',e=>{e.preventDefault();
       S.name=form.querySelector('#s-name').value.trim();
-      const i=parseAmt(form.querySelector('#s-inc').value);if(i>0){S.income=i;if(S.catBudgets)S.saveTarget=Math.max(0,i-S.budget)}
+      const i=readAmt(form.querySelector('#s-inc'));if(i>0){S.income=i;if(S.catBudgets)S.saveTarget=Math.max(0,i-S.budget)}
       S.payday=form.querySelector('#s-pay').value;
       const r=parseFloat(form.querySelector('#s-rate').value.replace(/[^\d.]/g,''));if(r>0)S.rate=r;
       persist();closeSheet();render();toast('Settings saved')});
@@ -1204,6 +1240,7 @@ document.addEventListener('click',e=>{
   if(d.goal)return goalSheet(d.goal);
   if(d.abono)return abonoSheet(d.abono);
   if(d.filter){ui.filter=d.filter;return render()}
+  if(d.cur)return setCur(d.cur);
   if(el.id==='fab')return addSheet('gasto');
   switch(d.act){
     case 'prev':return shiftMonth(-1);
@@ -1211,6 +1248,7 @@ document.addEventListener('click',e=>{
     case 'settings':return settingsSheet();
     case 'helper':return helperSheet();
     case 'cats':return catsSheet();
+    case 'cur':return setCur(inUSD()?'HNL':'USD');
     case 'newacct':return acctSheet(null,'efectivo');
     case 'newdebt':return acctSheet(null,'tarjeta');
     case 'newgoal':return goalSheet();
@@ -1220,7 +1258,7 @@ document.addEventListener('click',e=>{
       try{navigator.clipboard.writeText(location.href.split('#')[0]).then(done,()=>{el.textContent=location.href.split('#')[0]})}catch(e){el.textContent=location.href.split('#')[0]}
       return}
     case 'ob-skip':ui.obUsual={};ui.ob=4;render();window.scrollTo(0,0);return;
-    case 'sample':{const name=S.name;S=makeSample();S.name=name;persist();ui.view='inicio';render();toast('This is example money. Tap "Start my own" when you\'re ready.',3500);return}
+    case 'sample':{const name=S.name,cur=S.cur;S=makeSample();S.name=name;S.cur=cur;persist();ui.view='inicio';render();toast('This is example money. Tap "Start my own" when you\'re ready.',3500);return}
     case 'clear':
       if(el.dataset.armed){S=blankState(S);ui.ob=1;ui.obIncome=0;persist();ui.view='inicio';render()}
       else{el.dataset.armed='1';el.textContent='Tap again to remove the example'}
@@ -1238,7 +1276,7 @@ function importBackup(file,msg){
   if(!file)return;
   const r=new FileReader();
   r.onload=()=>{try{const d=JSON.parse(r.result);if(!d||!Array.isArray(d.txns)||!Array.isArray(d.accounts))throw 0;
-      S=d;if(S.onboarded===undefined)S.onboarded=true;applySkin();persist();closeSheet();render();toast('Backup restored')}
+      S=d;normalize();applySkin();persist();closeSheet();render();toast('Backup restored')}
     catch(e){msg.hidden=false;msg.style.color='var(--danger)';msg.textContent='That file is not a lockinGURL backup. Pick a file you saved from this app.'}};
   r.readAsText(file);
 }
