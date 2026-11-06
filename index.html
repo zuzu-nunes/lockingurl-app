@@ -1410,6 +1410,21 @@ function importBackup(file,msg){
 render();
 if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+// iPhone keeps a Home Screen app paused in memory, so it can show an old version for days.
+// Each time she comes back to the app, check for a newer release and reload into it (never mid-edit).
+const APP_V='17';
+let lastCheck=0;
+function checkUpdate(){
+  if(location.protocol!=='https:'||Date.now()-lastCheck<60000)return;lastCheck=Date.now();
+  navigator.serviceWorker?.getRegistration().then(r=>r&&r.update()).catch(()=>{});
+  fetch('index.html',{cache:'no-store'}).then(r=>r.ok?r.text():'').then(h=>{const m=h.match(/const APP_V='(\d+)'/);
+    if(!m||m[1]===APP_V||document.getElementById('sheet'))return;
+    // Reload once per new version, so a slow server can never cause a reload loop.
+    try{if(sessionStorage.getItem('lg-upd')===m[1])return;sessionStorage.setItem('lg-upd',m[1])}catch(e){}
+    location.reload()}).catch(()=>{});
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkUpdate()});
+checkUpdate();
 </script>
 </body>
 </html>

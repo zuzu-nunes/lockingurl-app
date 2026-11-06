@@ -1,5 +1,5 @@
 // Caches the app shell so lockinGURL opens without internet. Bump VERSION on every release.
-const VERSION = 'lockingurl-v16';
+const VERSION = 'lockingurl-v17';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest?v=12', 'icons/lg-icon-180.png', 'icons/lg-icon-192.png', 'icons/lg-icon-512.png', 'icons/cover.jpg'];
 
 self.addEventListener('install', e => {
@@ -16,8 +16,11 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
+  // The page's update check asks for a fresh copy; let it reach the network instead of this cache.
+  if (req.cache === 'no-store') return;
   if (req.mode === 'navigate') {
-    e.respondWith(fetch(req).then(res => {
+    // no-store skips the phone's web cache, which can hold an old page for up to 10 minutes.
+    e.respondWith(fetch(req.url, { cache: 'no-store', credentials: 'same-origin' }).then(res => {
       const copy = res.clone();
       caches.open(VERSION).then(c => c.put('index.html', copy));
       return res;
