@@ -87,7 +87,7 @@ button{cursor:pointer}
 .greet p{margin:0;color:var(--muted);text-transform:capitalize}
 
 .chips{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.chip{background:var(--card);border-radius:16px;padding:12px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:2px}
+.chip{border:0;text-align:left;font:inherit;color:inherit;background:var(--card);border-radius:16px;padding:12px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:2px}
 .chip b{font-family:var(--display);font-size:22px;font-weight:700}
 .chip span{font-size:12.5px;color:var(--muted)}
 
@@ -513,7 +513,7 @@ function recPlan(rec){
     <ul class="reclist num">${rows.map(([k,v])=>`<li>${badge(CATS[k])}<span>${CATS[k].n}</span><b>${L(v,0)}</b></li>`).join('')}</ul>
     ${rec.notes.map(n=>`<p class="tip">${icon('bulb')}<span>${n}</span></p>`).join('')}`;
 }
-function applyPlan(rec,income,usual){S.income=income;S.catBudgets={...rec.cats};S.budget=rec.total;S.saveTarget=rec.save;S.saveGoal=rec.goal||0;if(usual&&Object.keys(usual).length)S.usual={...usual}}
+function applyPlan(rec,income,usual){if(Math.abs(toMonthly(perCheck(),S.payday)-income)>1)S.payAmt=r2(income/paysPerMonth(S.payday));S.income=income;S.catBudgets={...rec.cats};S.budget=rec.total;S.saveTarget=rec.save;S.saveGoal=rec.goal||0;if(usual&&Object.keys(usual).length)S.usual={...usual}}
 
 /* ---------- sample data ---------- */
 function makeSample(){
@@ -575,7 +575,7 @@ const ui={view:'inicio',y:new Date().getFullYear(),m:new Date().getMonth(),filte
 try{const v=localStorage.getItem('lempiraflow:view');if(VIEWS.includes(v))ui.view=v}catch(e){}
 try{const raw=localStorage.getItem(LS);if(raw)S=JSON.parse(raw)}catch(e){}
 if(!S||!Array.isArray(S.txns))S=blankState();
-if(!S.onboarded&&S.obDraft){ui.ob=S.obDraft.ob||1;ui.obIncome=S.obDraft.income||0;ui.obUsual=S.obDraft.usual||null;ui.obSave=S.obDraft.save||0}
+if(!S.onboarded&&S.obDraft){ui.ob=S.obDraft.ob||1;ui.obIncome=S.obDraft.income||0;ui.obPer=S.obDraft.per||0;ui.obUsual=S.obDraft.usual||null;ui.obSave=S.obDraft.save||0}
 function normalize(){
   if(S.onboarded===undefined)S.onboarded=true;   // data saved by the first version
   if(S.income===undefined)S.income=0;
@@ -633,12 +633,44 @@ function txItem(t){
     <span class="a num ${t.type==='ingreso'?'in':''}">${t.type==='ingreso'?'+':''}${L(t.amt)}<small>${fmtDay(t.date)}</small></span>
   </button>`;
 }
-function paydaySelect(id){
-  const opts=[['last','Once a month, on the last day'],['semi','Every 15 days (15th and 30th)'],...Array.from({length:28},(_,i)=>[String(i+1),`Once a month, on the ${i+1}${[,'st','nd','rd'][(i+1)%10>3||((i+1)>10&&(i+1)<14)?0:(i+1)%10]||'th'}`])];
-  return `<select id="${id}">${opts.map(([v,n])=>`<option value="${v}" ${String(S.payday)===v?'selected':''}>${n}</option>`).join('')}</select>`;
+// How often she's paid: 'last' (once a month, last day) or 'biweekly' (every 14 days from S.payAnchor).
+// Older saves may hold 'semi' or a day number; those keep working and stay in the list.
+const PAY_LABEL={last:'Once a month (last day of the month)',biweekly:'Every two weeks',semi:'Every 15 days (15th and 30th)'};
+const payLabel=v=>PAY_LABEL[v]||`Once a month, on day ${v}`;
+const paysPerMonth=v=>v==='biweekly'?26/12:v==='semi'?2:1;
+const toMonthly=(per,v)=>r2(per*paysPerMonth(v));
+// What one paycheck is: the amount she typed, or the monthly figure split back out for older saves.
+const perCheck=()=>S.payAmt>0?S.payAmt:r2((S.income||0)/paysPerMonth(S.payday));
+function paydaySelect(id,cur=S.payday){
+  const keys=['last','biweekly'];if(!keys.includes(String(cur)))keys.push(String(cur));
+  return `<select id="${id}">${keys.map(v=>`<option value="${v}" ${String(cur)===v?'selected':''}>${payLabel(v)}</option>`).join('')}</select>`;
 }
+// Frequency, last payday (only for every two weeks) and the paycheck amount, used in setup, Settings and "My pay".
+function payFields(p,freq,per,anchor){
+  return `<div class="field"><label for="${p}-pay">How often do you get paid?</label>${paydaySelect(p+'-pay',freq)}</div>
+    <div class="field" id="${p}-anc-f" ${freq==='biweekly'?'':'hidden'}><label for="${p}-anc">When was your last payday?</label><input id="${p}-anc" type="date" value="${anchor||todayISO()}" max="${todayISO()}"></div>
+    <div class="field"><label for="${p}-inc" id="${p}-inc-l"></label><input id="${p}-inc" class="amount-in num" inputmode="decimal" placeholder="${PH()}" ${amtAttrs(per)}>
+    <p class="hint num" id="${p}-mo"></p></div>`;
+}
+function wirePay(f,p){
+  const sel=f.querySelector('#'+p+'-pay'),inc=f.querySelector('#'+p+'-inc');
+  const upd=()=>{const v=sel.value,once=paysPerMonth(v)===1;
+    f.querySelector('#'+p+'-anc-f').hidden=v!=='biweekly';
+    f.querySelector('#'+p+'-inc-l').textContent=once?`How much do you get each month? (${CUR_WORD()})`:`How much is each paycheck? (${CUR_WORD()})`;
+    const per=readAmt(inc),mo=f.querySelector('#'+p+'-mo');
+    mo.textContent=!once&&per>0?`About ${L(toMonthly(per,v),0)} a month`+(v==='biweekly'?' (26 paychecks a year)':''):'';};
+  sel.addEventListener('change',upd);inc.addEventListener('input',upd);upd();
+}
+function readPay(f,p){
+  const v=f.querySelector('#'+p+'-pay').value,per=readAmt(f.querySelector('#'+p+'-inc'));
+  const anc=f.querySelector('#'+p+'-anc').value||todayISO();
+  return {payday:v,per,anchor:v==='biweekly'?anc:(S.payAnchor||''),monthly:per>0?toMonthly(per,v):0};
+}
+function setPay(r){S.payday=r.payday;S.payAmt=r.per;if(r.payday==='biweekly')S.payAnchor=r.anchor;S.income=r.monthly;if(S.catBudgets)S.saveTarget=Math.max(0,S.income-S.budget)}
 function nextPayday(){
   const n=new Date();n.setHours(0,0,0,0);
+  if(S.payday==='biweekly'&&S.payAnchor){const [ay,am,ad]=S.payAnchor.split('-').map(Number);
+    const diff=Math.round((n-new Date(ay,am-1,ad))/864e5),r=((diff%14)+14)%14;return r?14-r:0}
   const cands=[];
   for(let k=0;k<2;k++){const f=new Date(n.getFullYear(),n.getMonth()+k,1),y=f.getFullYear(),m=f.getMonth(),last=daysIn(y,m);
     if(S.payday==='semi')cands.push(new Date(y,m,15),new Date(y,m,Math.min(30,last)));
@@ -665,7 +697,7 @@ const curSeg=()=>`<div class="seg" role="group" aria-label="Currency"><button ty
 const curPill=()=>`<button class="curpill" data-act="cur" aria-label="Showing ${CUR_WORD()}. Tap to show ${inUSD()?'lempiras':'dollars'}"><span class="${inUSD()?'':'on'}">L</span><span class="${inUSD()?'on':''}">$</span></button>`;
 function setCur(c,announce=true){
   const f=document.getElementById('ob');
-  if(f&&ui.ob===2){const v=readAmt(f.querySelector('#ob-inc'));if(v>0)ui.obIncome=v}
+  if(f&&ui.ob===2)obReadPay(f);
   S.cur=c==='USD'?'USD':'HNL';if(!S.onboarded)saveDraft();persist();render();
   if(announce)toast(inUSD()?`Showing dollars (L ${S.rate} = $1)`:'Showing lempiras');
 }
@@ -707,7 +739,7 @@ function vInicio(){
   <section class="card cta"><h2>Get a budget made for you</h2><p class="sub">Tell me what you get and what you usually spend. I'll suggest how much to spend on food, rent, fun and savings.</p>
     <button class="btn primary wide" data-act="helper">Make my budget</button></section>`}
   <div class="chips">
-    <div class="chip"><b class="num">${pd===0?'Today':pd+(pd===1?' day':' days')}</b><span>${pd===0?'is payday!':'until payday'}</span></div>
+    <button class="chip" data-act="pay" aria-label="Edit my pay"><b class="num">${pd===0?'Today':pd+(pd===1?' day':' days')}</b><span>${pd===0?'is payday!':'until payday'} · ${icon('pencil')} edit</span></button>
     <div class="chip"><b class="num">${bn.days} days</b><span>until your ${bn.name}</span></div>
   </div>
   <section class="card">
@@ -867,7 +899,7 @@ function vInstall(){
     <button class="link center" type="button" data-act="install-skip">Continue here anyway</button>
   </div>`;
 }
-function saveDraft(){S.obDraft={ob:ui.ob,income:ui.obIncome,usual:ui.obUsual,save:ui.obSave};persist()}
+function saveDraft(){S.obDraft={ob:ui.ob,income:ui.obIncome,per:ui.obPer,usual:ui.obUsual,save:ui.obSave};persist()}
 function vOnboarding(){
   const dots=`<div class="ob-dots" aria-label="Step ${ui.ob} of 4">${[1,2,3,4].map(i=>`<i class="${i<=ui.ob?'on':''}"></i>`).join('')}</div>`;
   if(ui.ob===1)return `<form class="ob" id="ob">${dots}
@@ -881,12 +913,11 @@ function vOnboarding(){
     <input type="file" id="ob-restore" accept="application/json,.json" hidden>
     <p class="hint" id="ob-rmsg" hidden></p></form>`;
   if(ui.ob===2)return `<form class="ob" id="ob">${dots}
-    <h1>How much money do you get each month?</h1>
-    <p class="lead">Your pay after deductions. If you're paid every 15 days, add both paychecks together. Include any remittances.</p>
+    <h1>How do you get paid?</h1>
+    <p class="lead">Your pay after deductions. Include any remittances.</p>
     <div class="field"><span class="flabel">I count my money in</span>${curSeg()}</div>
-    <div class="field"><label for="ob-inc">Monthly money in (${CUR_WORD()})</label><input id="ob-inc" class="amount-in num" inputmode="decimal" placeholder="${PH()}" ${amtAttrs(ui.obIncome||S.income||DEFAULT_INCOME)}></div>
-    <div class="field"><label for="ob-pay">When do you get paid?</label>${paydaySelect('ob-pay')}</div>
-    <p class="hint" id="ob-err" hidden style="color:var(--danger)">Type how much you get each month, like ${inUSD()?'1000':'25000'}.</p>
+    ${payFields('ob',S.payday,ui.obPer||S.payAmt||(ui.obIncome?r2(ui.obIncome/paysPerMonth(S.payday)):DEFAULT_INCOME),S.payAnchor)}
+    <p class="hint" id="ob-err" hidden style="color:var(--danger)">Type how much you get, like ${inUSD()?'1000':'25000'}.</p>
     <button class="btn primary wide xl" type="submit">Next</button>
     <button class="link center" type="button" data-act="ob-back">Back</button></form>`;
   if(ui.ob===3)return `<form class="ob" id="ob">${dots}
@@ -914,25 +945,28 @@ function obResave(f){
   if(v>=ui.obIncome){err.hidden=false;err.textContent=`That's all of your money. Pick less than ${L(ui.obIncome,0)}.`;return}
   ui.obSave=v>0?v:0;saveDraft();render();toast('Budget recalculated ✨');
 }
+// Keeps the setup draft in sync with the pay step (amount per paycheck, frequency, last payday).
+function obReadPay(f){const r=readPay(f,'ob');S.payday=r.payday;if(r.payday==='biweekly')S.payAnchor=r.anchor;if(r.per>0){ui.obPer=r.per;ui.obIncome=r.monthly}return r}
 function mountOnboarding(){
   const f=document.getElementById('ob');if(!f)return;
+  if(ui.ob===2)wirePay(f,'ob');
   if(ui.ob===3)wireUsual(f,()=>ui.obIncome);
   if(ui.ob===4)f.querySelectorAll('[data-p]').forEach(b=>b.addEventListener('click',()=>{ui.obSave=round50(ui.obIncome*+b.dataset.p);saveDraft();render()}));
   const rf=f.querySelector('#ob-restore');if(rf)rf.addEventListener('change',e=>importBackup(e.target.files[0],f.querySelector('#ob-rmsg')));
   let t;f.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(()=>{
     if(ui.ob===1)S.name=f.querySelector('#ob-name').value.trim();
-    if(ui.ob===2){const v=readAmt(f.querySelector('#ob-inc'));if(v>0)ui.obIncome=v;S.payday=f.querySelector('#ob-pay').value}
+    if(ui.ob===2)obReadPay(f);
     if(ui.ob===3)ui.obUsual=readUsual(f);
     saveDraft()},400)});
   f.addEventListener('change',()=>f.dispatchEvent(new Event('input')));
   f.addEventListener('submit',e=>{e.preventDefault();
     if(ui.ob===1){S.name=f.querySelector('#ob-name').value.trim();persist();ui.ob=2;render();return}
-    if(ui.ob===2){const v=readAmt(f.querySelector('#ob-inc'));if(!(v>0)){f.querySelector('#ob-err').hidden=false;return}ui.obIncome=v;S.payday=f.querySelector('#ob-pay').value;persist();ui.ob=3;render();return}
+    if(ui.ob===2){const r=obReadPay(f);if(!(r.per>0)){f.querySelector('#ob-err').hidden=false;return}S.payAmt=r.per;persist();ui.ob=3;render();return}
     if(ui.ob===3){ui.obUsual=readUsual(f);ui.ob=4;render();window.scrollTo(0,0);return}
     // A new amount typed but not recalculated yet: show that plan first instead of saving one she hasn't seen.
     const sv=readAmt(f.querySelector('#ob-save')),shown=recommend(ui.obIncome,S.txns,ui.obUsual,ui.obSave).save;
     if(sv>0&&Math.abs(sv-shown)>1)return obResave(f);
-    applyPlan(recommend(ui.obIncome,S.txns,ui.obUsual,ui.obSave),ui.obIncome,ui.obUsual);S.onboarded=true;delete S.obDraft;persist();ui.view='inicio';render();toast('All set! 🪩 Tap "I spent money" whenever you buy something.',3500);
+    applyPlan(recommend(ui.obIncome,S.txns,ui.obUsual,ui.obSave),ui.obIncome,ui.obUsual);if(ui.obPer)S.payAmt=ui.obPer;S.onboarded=true;delete S.obDraft;persist();ui.view='inicio';render();toast('All set! 🪩 Tap "I spent money" whenever you buy something.',3500);
   });
 }
 
@@ -1269,12 +1303,23 @@ function abonoSheet(id){
       g.saved=r2(g.saved+v);persist();closeSheet();render();toast(`Added ${L(v,0)}. Great job! 🕺`)});
   });
 }
+function paySheet(){
+  openSheet(`<div class="row"><h2>My pay</h2>${close}</div>
+    ${payFields('p',S.payday,perCheck(),S.payAnchor)}
+    <p class="hint" id="p-err" hidden style="color:var(--danger)">Type how much you get, like ${inUSD()?'1000':'25000'}.</p>
+    <button class="btn primary wide xl" type="submit">Save my pay</button>`,
+  form=>{wirePay(form,'p');
+    form.addEventListener('submit',e=>{e.preventDefault();const r=readPay(form,'p');
+      if(!(r.per>0)){form.querySelector('#p-err').hidden=false;return}
+      setPay(r);persist();closeSheet();render();
+      toast(S.catBudgets&&S.budget>S.income?`Saved. Your budget is now more than you get, so check the Budget tab.`:'Pay saved')});
+  });
+}
 function settingsSheet(){
   openSheet(`<div class="row"><h2>Settings</h2>${close}</div>
     <div class="field"><label for="s-name">Your name</label><input id="s-name" maxlength="30" value="${esc(S.name)}" placeholder="For the greeting"></div>
-    <div class="grid2"><div class="field"><label for="s-inc">Money in per month (<span id="s-sym">${SYM()}</span>)</label><input id="s-inc" class="num" inputmode="decimal" ${amtAttrs(S.income)}></div>
-    <div class="field"><label for="s-rate">Lempiras per dollar</label><input id="s-rate" class="num" inputmode="decimal" value="${S.rate}"></div></div>
-    <div class="field"><label for="s-pay">When do you get paid?</label>${paydaySelect('s-pay')}</div>
+    ${payFields('s',S.payday,perCheck(),S.payAnchor)}
+    <div class="field"><label for="s-rate">Lempiras per dollar</label><input id="s-rate" class="num" inputmode="decimal" value="${S.rate}"></div>
     <div class="field"><span class="flabel">Show my money in</span>${curSeg()}</div>
     <div class="field"><span class="flabel">Colors</span><div class="skins" role="group" aria-label="Colors">${SKINS.map(([k,n,c])=>`<button type="button" class="skin" data-skin="${k}" aria-pressed="${(S.skin||'blush')===k}"><i style="background:${c}"></i>${n}</button>`).join('')}</div></div>
     <button class="btn primary wide xl" type="submit">Save</button>
@@ -1291,17 +1336,17 @@ function settingsSheet(){
     form.querySelectorAll('[data-skin]').forEach(b=>b.addEventListener('click',()=>{S.skin=b.dataset.skin;applySkin();persist();form.querySelectorAll('[data-skin]').forEach(x=>x.setAttribute('aria-pressed',x===b))}));
     form.querySelectorAll('[data-cur]').forEach(b=>b.addEventListener('click',()=>{
       const inp=form.querySelector('#s-inc'),lv=readAmt(inp);setCur(b.dataset.cur,false);
-      inp.value=inp.defaultValue=fmtIn(lv);inp.dataset.l=lv||'';form.querySelector('#s-sym').textContent=SYM();
+      inp.value=inp.defaultValue=fmtIn(lv);inp.dataset.l=lv||'';inp.dispatchEvent(new Event('input'));
       form.querySelectorAll('[data-cur]').forEach(x=>x.setAttribute('aria-pressed',x===b))}));
+    wirePay(form,'s');
     form.querySelector('#s-cats').addEventListener('click',catsSheet);
     form.querySelector('#s-export').addEventListener('click',exportBackup);
     form.querySelector('#s-import').addEventListener('change',e=>importBackup(e.target.files[0],form.querySelector('#s-msg')));
-    deleteBtn(()=>{S=blankState(S);ui.ob=1;ui.obIncome=0;ui.obSave=0;persist();closeSheet();render()},'Tap again to erase everything')(form.querySelector('#s-clear'));
+    deleteBtn(()=>{S=blankState(S);ui.ob=1;ui.obIncome=0;ui.obPer=0;ui.obSave=0;persist();closeSheet();render()},'Tap again to erase everything')(form.querySelector('#s-clear'));
     deleteBtn(()=>{const name=S.name,cur=S.cur;S=makeSample();S.name=name;S.cur=cur;persist();closeSheet();render();toast('Showing example money')},'Tap again: this replaces your data')(form.querySelector('#s-sample'));
     form.addEventListener('submit',e=>{e.preventDefault();
       S.name=form.querySelector('#s-name').value.trim();
-      const i=readAmt(form.querySelector('#s-inc'));if(i>0){S.income=i;if(S.catBudgets)S.saveTarget=Math.max(0,i-S.budget)}
-      S.payday=form.querySelector('#s-pay').value;
+      const pr=readPay(form,'s');if(pr.per>0)setPay(pr);else S.payday=pr.payday;
       const r=parseFloat(form.querySelector('#s-rate').value.replace(/[^\d.]/g,''));if(r>0)S.rate=r;
       persist();closeSheet();render();toast('Settings saved')});
   },false);
@@ -1325,6 +1370,7 @@ document.addEventListener('click',e=>{
     case 'prev':return shiftMonth(-1);
     case 'next':return shiftMonth(1);
     case 'settings':return settingsSheet();
+    case 'pay':return paySheet();
     case 'helper':return helperSheet();
     case 'cats':return catsSheet();
     case 'savegoal':return saveSheet();
@@ -1341,7 +1387,7 @@ document.addEventListener('click',e=>{
     case 'ob-skip':ui.obUsual={};ui.ob=4;render();window.scrollTo(0,0);return;
     case 'sample':{const name=S.name,cur=S.cur;S=makeSample();S.name=name;S.cur=cur;persist();ui.view='inicio';render();toast('This is example money. Tap "Start my own" when you\'re ready.',3500);return}
     case 'clear':
-      if(el.dataset.armed){S=blankState(S);ui.ob=1;ui.obIncome=0;ui.obSave=0;persist();ui.view='inicio';render()}
+      if(el.dataset.armed){S=blankState(S);ui.ob=1;ui.obIncome=0;ui.obPer=0;ui.obSave=0;persist();ui.view='inicio';render()}
       else{el.dataset.armed='1';el.textContent='Tap again to remove the example'}
       return;
   }
